@@ -28,10 +28,12 @@ import time
 from pathlib import Path
 
 try:  # patchright is a drop-in replacement; fall back to stock playwright
+    from patchright.sync_api import TimeoutError as PWTimeoutError
     from patchright.sync_api import sync_playwright
 
     _ENGINE = "patchright"
 except ImportError:  # pragma: no cover
+    from playwright.sync_api import TimeoutError as PWTimeoutError
     from playwright.sync_api import sync_playwright
 
     _ENGINE = "playwright"
@@ -127,20 +129,49 @@ class AllegroBrowser:
         self._warmed_hosts.add(host)
         if path in ("", "/"):
             return
-        page.goto(f"https://{host}/", wait_until="domcontentloaded", timeout=45_000)
+        try:
+            page.goto(f"https://{host}/", wait_until="domcontentloaded", timeout=60_000)
+        except PWTimeoutError:
+            pass  # warm-up is best effort; the real navigation decides
         page.wait_for_timeout(random.uniform(2_000, 4_000))
+
+    def _navigate(self, page, url: str, attempts: int = 2) -> str:
+        """Navigate and return HTML, tolerating DataDome's stalled loads.
+
+        DataDome sometimes tarpits suspicious (especially headless) clients:
+        the navigation never fires DOMContentLoaded even though most of the
+        page has arrived. In that case whatever is in the DOM is usually
+        still parseable, so salvage it instead of giving up.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                resp = page.goto(url, wait_until="domcontentloaded", timeout=90_000)
+                if resp is not None and resp.status >= 400 and resp.status != 403:
+                    # 403 is DataDome (handled by callers); else it's a bad URL.
+                    print(f"warning: HTTP {resp.status} at {url}")
+                page.wait_for_timeout(random.uniform(1_500, 3_000))
+                return page.content()
+            except PWTimeoutError as exc:
+                last_exc = exc
+                html = page.content()
+                if len(html) > 20_000:  # page mostly arrived, use it
+                    print(f"warning: navigation stalled at {url}, using partial DOM")
+                    return html
+                if attempt + 1 < attempts:
+                    print(f"warning: timeout at {url}, retrying...")
+                    page.wait_for_timeout(random.uniform(4_000, 8_000))
+        raise BotBlockedError(
+            f"page never loaded at {url} ({last_exc}). DataDome may be "
+            "stalling this client - try again with --headful."
+        )
 
     def get_html(self, url: str, captcha_timeout: float = 180.0) -> str:
         assert self._ctx is not None, "use AllegroBrowser as a context manager"
         self._pace()
         page = self._ctx.pages[0] if self._ctx.pages else self._ctx.new_page()
         self._warm_up(page, url)
-        resp = page.goto(url, wait_until="domcontentloaded", timeout=45_000)
-        if resp is not None and resp.status >= 400 and resp.status != 403:
-            # 403 is DataDome (handled below); anything else means a bad URL.
-            print(f"warning: HTTP {resp.status} at {url}")
-        page.wait_for_timeout(random.uniform(1_500, 3_000))
-        html = page.content()
+        html = self._navigate(page, url)
         if _looks_hard_block(html):
             raise BotBlockedError(
                 f"DataDome hard block at {url}. The browser profile is now "
