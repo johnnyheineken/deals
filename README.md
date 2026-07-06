@@ -31,6 +31,8 @@ with an offline fallback).
 With [uv](https://docs.astral.sh/uv/) (recommended — no venv juggling):
 
 ```bash
+git clone https://github.com/johnnyheineken/deals.git
+cd deals
 uv run playwright install chromium   # one-time browser download
 uv run allegro-deals --help
 ```
