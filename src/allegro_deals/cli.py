@@ -81,6 +81,14 @@ def _cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_reset(args: argparse.Namespace) -> int:
+    browser = AllegroBrowser(profile_dir=args.profile)
+    browser.reset_profile()
+    print(f"removed browser profile at {browser.profile_dir}")
+    print("wait ~15 minutes before scanning again, then start with --headful")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="allegro-deals",
@@ -102,6 +110,9 @@ def main(argv: list[str] | None = None) -> int:
     p_check = sub.add_parser("check", help="cross-check one offer between allegro.cz and allegro.pl")
     p_check.add_argument("offer", help="offer id or allegro.cz URL")
     p_check.set_defaults(func=_cmd_check)
+
+    p_reset = sub.add_parser("reset", help="delete the browser profile after a DataDome block")
+    p_reset.set_defaults(func=_cmd_reset)
 
     args = parser.parse_args(argv)
     return args.func(args)

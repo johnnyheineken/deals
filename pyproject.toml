@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Find mispriced offers on allegro.cz (e.g. PLN prices displayed as CZK)"
 requires-python = ">=3.10"
 dependencies = [
-    "playwright>=1.40",
+    "patchright>=1.61.2",
 ]
 
 [project.optional-dependencies]

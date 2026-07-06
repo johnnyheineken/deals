@@ -33,16 +33,18 @@ With [uv](https://docs.astral.sh/uv/) (recommended — no venv juggling):
 ```bash
 git clone https://github.com/johnnyheineken/deals.git
 cd deals
-uv run playwright install chromium   # one-time browser download
 uv run allegro-deals --help
 ```
 
-Or with plain pip:
+If Google Chrome is installed, the tool drives it directly — no browser
+download needed (a real Chrome fingerprint is also what gets you past
+DataDome). Without Chrome, download the bundled browser once:
 
 ```bash
-pip install -e .
-playwright install chromium
+uv run patchright install chromium
 ```
+
+Or with plain pip: `pip install -e .`
 
 ## Usage
 
@@ -52,6 +54,11 @@ while residential IPs are generally fine. On the first run (or when Allegro
 gets suspicious) use `--headful` and solve the captcha in the opened browser
 window once — the cookie is kept in a persistent profile
 (`~/.cache/allegro-deals/profile`), so later headless runs pass.
+
+The scraper uses [patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright)
+(a stealth Playwright fork), prefers your real installed Chrome, sends the
+browser's native user agent, and visits the homepage before any listing URL —
+all things DataDome checks.
 
 ```bash
 # scan searches for anomalies (writes findings.jsonl)
@@ -84,6 +91,22 @@ BRIO 36029 Vlaková sada s mohutnou červenou akční lokomotivou
 - `--max-products` / `--pages` — how much to crawl per query. Keep it modest;
   the crawler paces itself (1.5–4 s between requests) on purpose.
 - `--fx 5.65` — pin the exchange rate manually.
+
+## If you get blocked anyway
+
+A page saying **"Byli jste zablokováni"** is a DataDome hard block, and the
+block state is stored in the profile's cookie. Recover with:
+
+```bash
+uv run allegro-deals reset     # deletes the browser profile
+# wait ~15 minutes, then
+uv run allegro-deals --headful scan "..."
+```
+
+Scan less aggressively afterwards (fewer `--max-products`, one query per
+run). If blocks persist, browse allegro.cz normally in the headful window
+for a minute (click an offer or two) before scanning — a profile with human
+history survives much longer.
 
 ## Notes & fair play
 
