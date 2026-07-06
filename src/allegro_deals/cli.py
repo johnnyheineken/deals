@@ -28,6 +28,9 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     except BotBlockedError as exc:
         print(f"blocked: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:  # playwright network errors: keep the message, drop the traceback
+        print(f"network/browser error: {exc}", file=sys.stderr)
+        return 3
     if all_anomalies:
         append_findings(all_anomalies, args.out)
         swaps = sum(1 for a in all_anomalies if a.kind == "currency_swap")
@@ -64,6 +67,9 @@ def _cmd_check(args: argparse.Namespace) -> int:
     except BotBlockedError as exc:
         print(f"blocked: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:
+        print(f"network/browser error: {exc}", file=sys.stderr)
+        return 3
     if czk is None or pln is None:
         print(f"could not read prices (CZK: {czk}, PLN: {pln})", file=sys.stderr)
         return 1

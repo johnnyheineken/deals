@@ -8,6 +8,7 @@ headless runs typically pass.
 
 from __future__ import annotations
 
+import os
 import random
 import time
 from pathlib import Path
@@ -51,9 +52,15 @@ class AllegroBrowser:
 
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self._pw = sync_playwright().start()
+        # Escape hatches for unusual environments: point at a specific
+        # Chromium build and/or force an HTTP proxy.
+        executable = os.environ.get("ALLEGRO_DEALS_CHROME")
+        proxy_server = os.environ.get("ALLEGRO_DEALS_PROXY")
         self._ctx = self._pw.chromium.launch_persistent_context(
             str(self.profile_dir),
             headless=not self.headful,
+            executable_path=executable or None,
+            proxy={"server": proxy_server} if proxy_server else None,
             locale="cs-CZ",
             user_agent=USER_AGENT,
             viewport={"width": 1366, "height": 900},
