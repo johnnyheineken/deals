@@ -13,7 +13,7 @@ from .detect import DEFAULT_MAX_RATIO, find_anomalies
 from .extract import offers_from_html, product_links_from_html
 from .models import Anomaly
 
-SEARCH_URL = "https://allegro.cz/listing?string={query}&p={page}"
+SEARCH_URL = "https://allegro.cz/vyhledavani?string={query}"
 
 
 def scan_query(
@@ -33,7 +33,9 @@ def scan_query(
     """
     product_urls: list[str] = []
     for page_no in range(1, pages + 1):
-        url = SEARCH_URL.format(query=urllib.parse.quote(query), page=page_no)
+        url = SEARCH_URL.format(query=urllib.parse.quote(query))
+        if page_no > 1:
+            url += f"&p={page_no}"
         log(f"searching: {url}")
         html = browser.get_html(url)
         for link in product_links_from_html(html):

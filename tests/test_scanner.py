@@ -31,7 +31,7 @@ class StubBrowser:
 
     def get_html(self, url):
         self.requested.append(url)
-        return SEARCH_HTML if "/listing" in url else PRODUCT_HTML
+        return SEARCH_HTML if "/vyhledavani" in url else PRODUCT_HTML
 
 
 def test_scan_query_end_to_end(tmp_path):
@@ -43,7 +43,7 @@ def test_scan_query_end_to_end(tmp_path):
     assert a.offer.offer_id == "16810772956"
     assert a.offer.currency == "CZK"  # the PLN offer must not pollute the peer group
     assert a.context["query"] == "brio vlak"
-    assert browser.requested[0].startswith("https://allegro.cz/listing?string=brio%20vlak")
+    assert browser.requested[0] == "https://allegro.cz/vyhledavani?string=brio%20vlak"
 
     out = tmp_path / "findings.jsonl"
     append_findings(anomalies, out)

@@ -135,7 +135,10 @@ class AllegroBrowser:
         self._pace()
         page = self._ctx.pages[0] if self._ctx.pages else self._ctx.new_page()
         self._warm_up(page, url)
-        page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+        resp = page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+        if resp is not None and resp.status >= 400 and resp.status != 403:
+            # 403 is DataDome (handled below); anything else means a bad URL.
+            print(f"warning: HTTP {resp.status} at {url}")
         page.wait_for_timeout(random.uniform(1_500, 3_000))
         html = page.content()
         if _looks_hard_block(html):
