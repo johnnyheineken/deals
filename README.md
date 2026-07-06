@@ -28,6 +28,15 @@ with an offline fallback).
 
 ## Install
 
+With [uv](https://docs.astral.sh/uv/) (recommended — no venv juggling):
+
+```bash
+uv run playwright install chromium   # one-time browser download
+uv run allegro-deals --help
+```
+
+Or with plain pip:
+
 ```bash
 pip install -e .
 playwright install chromium
@@ -44,15 +53,17 @@ window once — the cookie is kept in a persistent profile
 
 ```bash
 # scan searches for anomalies (writes findings.jsonl)
-allegro-deals scan "brio vlak" "lego technic" --pages 2 --max-products 20
+uv run allegro-deals scan "brio vlak" "lego technic" --pages 2 --max-products 20
 
 # first run / captcha:
-allegro-deals --headful scan "brio vlak"
+uv run allegro-deals --headful scan "brio vlak"
 
 # cross-check a specific offer you found manually
-allegro-deals check "https://allegro.cz/produkt/...?offerId=16810772956"
-allegro-deals check 16810772956
+uv run allegro-deals check "https://allegro.cz/produkt/...?offerId=16810772956"
+uv run allegro-deals check 16810772956
 ```
+
+(Drop the `uv run` prefix if you installed with pip.)
 
 Example finding:
 
@@ -86,8 +97,7 @@ BRIO 36029 Vlaková sada s mohutnou červenou akční lokomotivou
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-python -m pytest
+uv run pytest          # or: pip install -e ".[dev]" && python -m pytest
 ```
 
 The scraping layer is isolated in `browser.py`; everything else (extraction,

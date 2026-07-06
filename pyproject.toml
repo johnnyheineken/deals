@@ -14,6 +14,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 
+# uv includes the "dev" dependency group by default, so `uv run pytest`
+# works out of the box.
+[dependency-groups]
+dev = ["pytest>=7"]
+
 [project.scripts]
 allegro-deals = "allegro_deals.cli:main"
 
