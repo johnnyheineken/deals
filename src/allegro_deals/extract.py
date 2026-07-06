@@ -1,0 +1,204 @@
+"""Extract offer data from Allegro pages.
+
+Allegro renders listing and product pages from JSON state embedded in
+``<script>`` tags. Markup classes are obfuscated and change often, but the
+embedded state keeps a recognisable shape: offer objects carry a name plus a
+nested price ``{"amount": "...", "currency": "..."}``. Instead of pinning
+exact paths into that state (which differ between listing, product and offer
+pages and shift between deployments), we harvest every JSON blob we can find
+and walk it for offer-shaped dicts.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Iterator
+
+from .models import Offer
+
+_SCRIPT_JSON_RE = re.compile(
+    r"<script[^>]*type=[\"']application/(?:ld\+)?json[\"'][^>]*>(.*?)</script>",
+    re.DOTALL | re.IGNORECASE,
+)
+_INLINE_ASSIGN_RE = re.compile(r"=\s*(\{)")
+_SCRIPT_ANY_RE = re.compile(r"<script\b[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
+# Offer URLs end with the numeric id (".../oferta/nazev-nabidky-16810772956"),
+# product URLs carry it as ?offerId=...
+_OFFER_ID_QUERY_RE = re.compile(r"offerId=(\d{8,})")
+_OFFER_ID_TRAILING_RE = re.compile(r"-(\d{8,})(?:[/?#]|$)")
+
+
+def _balanced_json(text: str, start: int) -> str | None:
+    """Return the balanced {...} substring starting at ``start``, or None."""
+    depth = 0
+    in_str = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
+def iter_json_blobs(html: str) -> Iterator[Any]:
+    """Yield every parseable JSON object embedded in the page."""
+    for m in _SCRIPT_JSON_RE.finditer(html):
+        try:
+            yield json.loads(m.group(1))
+        except ValueError:
+            continue
+    for script in _SCRIPT_ANY_RE.finditer(html):
+        body = script.group(1)
+        if '"amount"' not in body and "'amount'" not in body:
+            continue
+        for assign in _INLINE_ASSIGN_RE.finditer(body):
+            blob = _balanced_json(body, assign.start(1))
+            if blob is None or len(blob) < 50:
+                continue
+            try:
+                yield json.loads(blob)
+            except ValueError:
+                continue
+
+
+def _walk_dicts(obj: Any) -> Iterator[dict]:
+    stack = [obj]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            yield cur
+            stack.extend(cur.values())
+        elif isinstance(cur, list):
+            stack.extend(cur)
+
+
+def _as_price(node: Any) -> tuple[float, str] | None:
+    if not isinstance(node, dict):
+        return None
+    amount = node.get("amount")
+    currency = node.get("currency")
+    if amount is None or not isinstance(currency, str):
+        return None
+    try:
+        return float(str(amount).replace(",", ".").replace("\xa0", "")), currency
+    except ValueError:
+        return None
+
+
+def _find_price(d: dict) -> tuple[float, str] | None:
+    # Common shapes, most specific first:
+    #   {"sellingMode": {"price": {...}}}, {"price": {...}},
+    #   {"price": {"mainPrice": {...}}}, {"prices": {"main"/"minimal": {...}}}
+    selling = d.get("sellingMode")
+    if isinstance(selling, dict):
+        price = _as_price(selling.get("price"))
+        if price:
+            return price
+    for key in ("price", "prices", "mainPrice", "minimalPrice", "buyNowPrice"):
+        node = d.get(key)
+        price = _as_price(node)
+        if price:
+            return price
+        if isinstance(node, dict):
+            for sub in ("mainPrice", "main", "minimal", "amount", "sale", "regular"):
+                price = _as_price(node.get(sub))
+                if price:
+                    return price
+    return None
+
+
+def _find_title(d: dict) -> str | None:
+    for key in ("name", "title", "offerName", "productName"):
+        val = d.get(key)
+        if isinstance(val, str) and len(val) >= 5:
+            return val
+        if isinstance(val, dict):
+            text = val.get("text") or val.get("value")
+            if isinstance(text, str) and len(text) >= 5:
+                return text
+    return None
+
+
+def _find_url(d: dict) -> str | None:
+    for key in ("url", "offerUrl", "href", "link"):
+        val = d.get(key)
+        if isinstance(val, str) and "allegro" in val:
+            return val
+    return None
+
+
+def offer_id_from_url(url: str) -> str | None:
+    m = _OFFER_ID_QUERY_RE.search(url) or _OFFER_ID_TRAILING_RE.search(url)
+    return m.group(1) if m else None
+
+
+def _find_offer_id(d: dict, url: str | None) -> str | None:
+    for key in ("id", "offerId"):
+        val = d.get(key)
+        if isinstance(val, (str, int)) and str(val).isdigit() and len(str(val)) >= 8:
+            return str(val)
+    if url:
+        return offer_id_from_url(url)
+    return None
+
+
+def _find_seller(d: dict) -> str | None:
+    seller = d.get("seller")
+    if isinstance(seller, dict):
+        login = seller.get("login") or seller.get("name")
+        if isinstance(login, str):
+            return login
+    return None
+
+
+def offers_from_html(html: str) -> list[Offer]:
+    """Best-effort extraction of every offer visible in a page's JSON state."""
+    seen: dict[str, Offer] = {}
+    for blob in iter_json_blobs(html):
+        for d in _walk_dicts(blob):
+            price = _find_price(d)
+            if price is None:
+                continue
+            title = _find_title(d)
+            if title is None:
+                continue
+            url = _find_url(d)
+            offer = Offer(
+                title=title.strip(),
+                price=price[0],
+                currency=price[1],
+                offer_id=_find_offer_id(d, url),
+                url=url,
+                seller=_find_seller(d),
+            )
+            key = offer.key()
+            # Prefer entries that carry an explicit offer id.
+            if key not in seen or (offer.offer_id and not seen[key].offer_id):
+                seen[key] = offer
+    return list(seen.values())
+
+
+def product_links_from_html(html: str, base: str = "https://allegro.cz") -> list[str]:
+    """Collect /produkt/... links (product pages aggregate all offers)."""
+    links: list[str] = []
+    for m in re.finditer(r"[\"'](https://allegro\.cz)?(/produkt/[a-z0-9-]+)[\"'?]", html):
+        path = m.group(2)
+        url = base + path
+        if url not in links:
+            links.append(url)
+    return links
