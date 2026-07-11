@@ -16,6 +16,17 @@ from .models import Anomaly
 SEARCH_URL = "https://allegro.cz/vyhledavani?string={query}"
 
 
+def fetch_many(fetcher, urls: list[str], log: Callable[[str], None]) -> dict[str, str]:
+    """Fetch a batch of URLs via get_many when the fetcher supports it
+    (one Apify actor run), else sequentially (local browser)."""
+    if hasattr(fetcher, "get_many"):
+        return fetcher.get_many(urls, log=log)
+    out: dict[str, str] = {}
+    for url in urls:
+        out[url] = fetcher.get_html(url)
+    return out
+
+
 def scan_query(
     browser: AllegroBrowser,
     query: str,
@@ -31,25 +42,25 @@ def scan_query(
     product, which gives a trustworthy median to compare against - the same
     comparison a human makes when a 239 CZK offer sits under a 1400 CZK one.
     """
-    product_urls: list[str] = []
+    search_urls = []
     for page_no in range(1, pages + 1):
         url = SEARCH_URL.format(query=urllib.parse.quote(query))
         if page_no > 1:
             url += f"&p={page_no}"
-        log(f"searching: {url}")
-        html = browser.get_html(url)
+        search_urls.append(url)
+    log(f"searching: {', '.join(search_urls)}")
+
+    product_urls: list[str] = []
+    for html in fetch_many(browser, search_urls, log).values():
         for link in product_links_from_html(html):
             if link not in product_urls:
                 product_urls.append(link)
-        if len(product_urls) >= max_products:
-            break
 
     product_urls = product_urls[:max_products]
     log(f"inspecting {len(product_urls)} product pages")
 
     anomalies: list[Anomaly] = []
-    for url in product_urls:
-        html = browser.get_html(url)
+    for url, html in fetch_many(browser, product_urls, log).items():
         offers = [o for o in offers_from_html(html) if o.currency == "CZK"]
         found = find_anomalies(offers, fx_pln_czk, max_ratio=max_ratio)
         for anomaly in found:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
+from .apify import ApifyError, ApifyFetcher
 from .browser import AllegroBrowser, BotBlockedError
 from .detect import DEFAULT_MAX_RATIO, classify_cross_market
 from .extract import offer_id_from_url, offers_from_html
@@ -10,23 +12,32 @@ from .fx import get_pln_czk
 from .scanner import append_findings, scan_query
 
 
+def _make_fetcher(args: argparse.Namespace):
+    engine = args.engine
+    if engine == "auto":
+        engine = "apify" if (args.apify_token or os.environ.get("APIFY_TOKEN")) else "browser"
+    if engine == "apify":
+        return ApifyFetcher(token=args.apify_token)
+    return AllegroBrowser(headful=args.headful, profile_dir=args.profile)
+
+
 def _cmd_scan(args: argparse.Namespace) -> int:
     fx = args.fx or get_pln_czk()
     print(f"PLN/CZK rate: {fx:.3f}")
     all_anomalies = []
     try:
-        with AllegroBrowser(headful=args.headful, profile_dir=args.profile) as browser:
+        with _make_fetcher(args) as fetcher:
             for query in args.queries:
                 all_anomalies += scan_query(
-                    browser,
+                    fetcher,
                     query,
                     fx_pln_czk=fx,
                     pages=args.pages,
                     max_products=args.max_products,
                     max_ratio=args.max_ratio,
                 )
-    except BotBlockedError as exc:
-        print(f"blocked: {exc}", file=sys.stderr)
+    except (BotBlockedError, ApifyError) as exc:
+        print(f"blocked/failed: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:  # playwright network errors: keep the message, drop the traceback
         print(f"network/browser error: {exc}", file=sys.stderr)
@@ -61,11 +72,11 @@ def _cmd_check(args: argparse.Namespace) -> int:
     cz_url = args.offer if args.offer.startswith("http") else f"https://allegro.cz/oferta/{offer_id}"
     pl_url = f"https://allegro.pl/oferta/{offer_id}"
     try:
-        with AllegroBrowser(headful=args.headful, profile_dir=args.profile) as browser:
-            czk = _price_for_offer(browser.get_html(cz_url), offer_id, "CZK")
-            pln = _price_for_offer(browser.get_html(pl_url), offer_id, "PLN")
-    except BotBlockedError as exc:
-        print(f"blocked: {exc}", file=sys.stderr)
+        with _make_fetcher(args) as fetcher:
+            czk = _price_for_offer(fetcher.get_html(cz_url), offer_id, "CZK")
+            pln = _price_for_offer(fetcher.get_html(pl_url), offer_id, "PLN")
+    except (BotBlockedError, ApifyError) as exc:
+        print(f"blocked/failed: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
         print(f"network/browser error: {exc}", file=sys.stderr)
@@ -95,8 +106,15 @@ def main(argv: list[str] | None = None) -> int:
         description="Find offers on allegro.cz priced in the wrong currency.",
     )
     parser.add_argument("--fx", type=float, help="override PLN/CZK rate")
-    parser.add_argument("--headful", action="store_true", help="show the browser (needed to solve a captcha once)")
-    parser.add_argument("--profile", help="browser profile dir (keeps DataDome cookies)")
+    parser.add_argument(
+        "--engine",
+        choices=["auto", "apify", "browser"],
+        default="auto",
+        help="fetch via Apify or a local browser (auto: apify when APIFY_TOKEN is set)",
+    )
+    parser.add_argument("--apify-token", help="Apify API token (or set APIFY_TOKEN)")
+    parser.add_argument("--headful", action="store_true", help="browser engine: show the window (needed to solve a captcha once)")
+    parser.add_argument("--profile", help="browser engine: profile dir (keeps DataDome cookies)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_scan = sub.add_parser("scan", help="search allegro.cz and flag suspicious offers")

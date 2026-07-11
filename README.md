@@ -48,17 +48,37 @@ Or with plain pip: `pip install -e .`
 
 ## Usage
 
-Run this **on your own machine / home connection**. Allegro sits behind
-DataDome bot protection; datacenter IPs get a captcha wall no matter what,
-while residential IPs are generally fine. On the first run (or when Allegro
-gets suspicious) use `--headful` and solve the captcha in the opened browser
-window once — the cookie is kept in a persistent profile
-(`~/.cache/allegro-deals/profile`), so later headless runs pass.
+Two fetch engines; `--engine auto` (the default) picks Apify when
+`APIFY_TOKEN` is set, the local browser otherwise.
 
-The scraper uses [patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright)
+### Apify engine (recommended)
+
+Allegro sits behind DataDome bot protection, which makes local scraping a
+cat-and-mouse game. The Apify engine outsources page fetching to the
+[apify/web-scraper](https://apify.com/apify/web-scraper) actor — a real
+browser on Apify's infrastructure behind managed proxies — and parses the
+returned HTML locally.
+
+1. Create an account at [console.apify.com](https://console.apify.com)
+   (free plan includes monthly credits).
+2. Copy your API token from *Settings → API & Integrations*.
+3. `export APIFY_TOKEN=apify_api_...`
+
+Costs come from actor compute plus proxy traffic. Residential proxies
+(the default here, `APIFY_PROXY_GROUPS=RESIDENTIAL`) have the best pass
+rate on Allegro but require a paid proxy add-on on some plans; set
+`APIFY_PROXY_GROUPS=DATACENTER` to try the cheaper pool.
+
+### Local browser engine
+
+Runs on **your own machine / home connection** (datacenter IPs get a
+captcha wall). Uses [patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright)
 (a stealth Playwright fork), prefers your real installed Chrome, sends the
-browser's native user agent, and visits the homepage before any listing URL —
-all things DataDome checks.
+browser's native user agent, and warms up via the homepage — all things
+DataDome checks. On the first run (or when Allegro gets suspicious) use
+`--headful` and solve the captcha in the opened window once; the cookie is
+kept in a persistent profile (`~/.cache/allegro-deals/profile`), so later
+runs pass. Force it with `--engine browser`.
 
 ```bash
 # scan searches for anomalies (writes findings.jsonl)
