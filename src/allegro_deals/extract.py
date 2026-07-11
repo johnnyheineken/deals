@@ -22,7 +22,8 @@ _SCRIPT_JSON_RE = re.compile(
     r"<script[^>]*type=[\"']application/(?:ld\+)?json[\"'][^>]*>(.*?)</script>",
     re.DOTALL | re.IGNORECASE,
 )
-_INLINE_ASSIGN_RE = re.compile(r"=\s*(\{)")
+# catches both `window.x = {...}` and `window.dataLayer = [{...}]`
+_INLINE_ASSIGN_RE = re.compile(r"=\s*\[?\s*(\{)")
 _SCRIPT_ANY_RE = re.compile(r"<script\b[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
 # Offer URLs end with the numeric id (".../oferta/nazev-nabidky-16810772956"),
 # product URLs carry it as ?offerId=...
@@ -65,7 +66,7 @@ def iter_json_blobs(html: str) -> Iterator[Any]:
             continue
     for script in _SCRIPT_ANY_RE.finditer(html):
         body = script.group(1)
-        if '"amount"' not in body and "'amount'" not in body:
+        if '"amount"' not in body and '"price"' not in body:
             continue
         for assign in _INLINE_ASSIGN_RE.finditer(body):
             blob = _balanced_json(body, assign.start(1))
@@ -101,6 +102,19 @@ def _as_price(node: Any) -> tuple[float, str] | None:
         return None
 
 
+def _flat_price(d: dict) -> tuple[float, str] | None:
+    """Flat shapes: {"price": 252, "currency": "CZK"} (dataLayer) and
+    {"price": "252.00", "priceCurrency": "CZK"} (schema.org ld+json)."""
+    val = d.get("price")
+    currency = d.get("currency") or d.get("priceCurrency")
+    if isinstance(val, (int, float, str)) and isinstance(currency, str) and len(currency) == 3:
+        try:
+            return float(str(val).replace(",", ".")), currency
+        except ValueError:
+            return None
+    return None
+
+
 def _find_price(d: dict) -> tuple[float, str] | None:
     # Common shapes, most specific first:
     #   {"sellingMode": {"price": {...}}}, {"price": {...}},
@@ -120,6 +134,15 @@ def _find_price(d: dict) -> tuple[float, str] | None:
                 price = _as_price(node.get(sub))
                 if price:
                     return price
+    price = _flat_price(d)
+    if price:
+        return price
+    # schema.org Product: name here, price inside "offers"
+    offers_node = d.get("offers")
+    if isinstance(offers_node, list) and offers_node:
+        offers_node = offers_node[0]
+    if isinstance(offers_node, dict):
+        return _flat_price(offers_node)
     return None
 
 

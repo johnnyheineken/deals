@@ -65,3 +65,23 @@ def test_offer_id_from_url():
 def test_ignores_broken_json():
     html = "<script>window.x = {broken json;</script>"
     assert offers_from_html(html) == []
+
+
+OFFER_PAGE_HTML = """
+<script>window.dataLayer=[{"price":252,"currency":"CZK","pageType":"detail",
+"offerName":"Brio 30411 Parni vlacek Steam & Go","offerId":"15370652022"}];</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Product",
+ "name":"Brio 30411 Parni vlacek Steam & Go",
+ "offers":{"@type":"Offer","price":"252.00","priceCurrency":"CZK",
+           "url":"https://allegro.cz/produkt/parni-lokomotiva-brio-30411-01c5b2ee"}}
+</script>
+"""
+
+
+def test_offer_detail_page_shapes():
+    # flat dataLayer dict and schema.org ld+json, as on /nabidka/ pages
+    offers = offers_from_html(OFFER_PAGE_HTML)
+    prices = {(o.price, o.currency) for o in offers}
+    assert (252.0, "CZK") in prices
+    assert any(o.offer_id == "15370652022" for o in offers)

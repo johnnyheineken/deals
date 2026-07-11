@@ -62,13 +62,40 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
-def _price_for_offer(html: str, offer_id: str | None, currency: str) -> float | None:
+def _offer_from_html(html: str, offer_id: str | None, currency: str):
     offers = [o for o in offers_from_html(html) if o.currency == currency]
     if offer_id:
         for o in offers:
             if o.offer_id == offer_id:
-                return o.price
-    return offers[0].price if offers else None
+                return o
+    return offers[0] if offers else None
+
+
+def _pl_reference_by_model(fetcher, title: str) -> tuple[float, str] | None:
+    """Median PLN price of allegro.pl offers matching the title's model number.
+
+    Fallback for offers that exist only on allegro.cz (no shared offer id).
+    """
+    import urllib.parse
+    from statistics import median
+
+    from .detect import model_tokens
+    from .scanner import PL_SEARCH_URL
+
+    tokens = model_tokens(title)
+    if not tokens:
+        return None
+    token = sorted(tokens)[0]
+    query = f"{title.split()[0]} {token}"
+    html = fetcher.get_html(PL_SEARCH_URL.format(query=urllib.parse.quote(query)))
+    prices = [
+        o.price
+        for o in offers_from_html(html)
+        if o.currency == "PLN" and token in model_tokens(o.title)
+    ]
+    if not prices:
+        return None
+    return median(prices), f"median of {len(prices)} allegro.pl offers for '{query}'"
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
@@ -81,22 +108,40 @@ def _cmd_check(args: argparse.Namespace) -> int:
     pl_url = f"https://allegro.pl/oferta/{offer_id}"
     try:
         with _make_fetcher(args) as fetcher:
-            czk = _price_for_offer(fetcher.get_html(cz_url), offer_id, "CZK")
-            pln = _price_for_offer(fetcher.get_html(pl_url), offer_id, "PLN")
+            cz_offer = _offer_from_html(fetcher.get_html(cz_url), offer_id, "CZK")
+            if cz_offer is None:
+                print(f"could not read the CZK price from {cz_url}", file=sys.stderr)
+                return 1
+            pln_source = f"same offer ({pl_url})"
+            try:
+                pl_offer = _offer_from_html(fetcher.get_html(pl_url), offer_id, "PLN")
+            except (BotBlockedError, ApifyError, BrightDataError):
+                pl_offer = None
+            if pl_offer is not None:
+                pln = pl_offer.price
+            else:
+                # offer not mirrored on allegro.pl - compare by model number
+                ref = _pl_reference_by_model(fetcher, cz_offer.title)
+                if ref is None:
+                    print(
+                        f"offer {offer_id} not found on allegro.pl and no "
+                        "model-number match either", file=sys.stderr,
+                    )
+                    return 1
+                pln, pln_source = ref
     except (BotBlockedError, ApifyError, BrightDataError) as exc:
         print(f"blocked/failed: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
         print(f"network/browser error: {exc}", file=sys.stderr)
         return 3
-    if czk is None or pln is None:
-        print(f"could not read prices (CZK: {czk}, PLN: {pln})", file=sys.stderr)
-        return 1
+    czk = cz_offer.price
     verdict = classify_cross_market(czk, pln, fx)
-    print(f"offer {offer_id}: {czk:.2f} CZK on allegro.cz, {pln:.2f} PLN on allegro.pl")
-    print(f"implied rate {czk / pln:.2f} (real {fx:.2f}) -> {verdict}")
+    print(f"offer {offer_id}: {cz_offer.title[:70]}")
+    print(f"  {czk:.2f} CZK on allegro.cz vs {pln:.2f} PLN ({pln_source})")
+    print(f"  implied rate {czk / pln:.2f} (real {fx:.2f}) -> {verdict}")
     if verdict == "currency_swap":
-        print("looks like the PLN price is displayed as CZK - that's a deal!")
+        print("  looks like the PLN price is displayed as CZK - that's a deal!")
     return 0
 
 

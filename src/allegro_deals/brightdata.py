@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -64,25 +65,32 @@ class BrightDataFetcher:
     def __exit__(self, *exc) -> None:
         pass
 
-    def get_html(self, url: str) -> str:
-        payload = build_request_payload(url, self.zone)
-        req = urllib.request.Request(
-            API_URL,
-            data=json.dumps(payload).encode(),
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.token}",
-            },
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=180) as resp:
-                return resp.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode(errors="replace")[:300]
-            raise BrightDataError(
-                f"Bright Data {exc.code} for {url}: {detail}"
-            ) from exc
+    def get_html(self, url: str, attempts: int = 3) -> str:
+        payload = json.dumps(build_request_payload(url, self.zone)).encode()
+        last_error = ""
+        for attempt in range(attempts):
+            req = urllib.request.Request(
+                API_URL,
+                data=payload,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.token}",
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=180) as resp:
+                    return resp.read().decode("utf-8", errors="replace")
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode(errors="replace")[:300]
+                last_error = f"Bright Data {exc.code} for {url}: {detail}"
+                if exc.code < 500:  # 4xx won't get better on retry
+                    raise BrightDataError(last_error) from exc
+            except (TimeoutError, OSError) as exc:
+                last_error = f"Bright Data request for {url} failed: {exc}"
+            if attempt + 1 < attempts:
+                time.sleep(3 * (attempt + 1))
+        raise BrightDataError(last_error)
 
     def get_many(self, urls: list[str], log=print) -> dict[str, str]:
         if not urls:
