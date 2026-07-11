@@ -92,6 +92,13 @@ def find_cross_discrepancies(
         for token in model_tokens(o.title):
             pl_by_token.setdefault(token, []).append(o.price)
 
+    # Accessories that share the main product's model number and would
+    # false-positive against the full product's price when matched by token.
+    partial_markers = (
+        "návod", "navod", "instrukcja", "manual", "krabice", "pudełko",
+        "samolepk", "naklejk", "nálepk", "minifig", "díl", "części",
+    )
+
     results: list[CrossDiscrepancy] = []
     for cz in cz_offers:
         if cz.price < min_price:
@@ -102,6 +109,9 @@ def find_cross_discrepancies(
             pln_ref = pl_by_id[cz.offer_id].price
             matched_by = "offer_id"
         else:
+            lowered = cz.title.lower()
+            if any(marker in lowered for marker in partial_markers):
+                continue
             tokens = model_tokens(cz.title)
             # pick the token with the most Polish offers behind it
             best = max(

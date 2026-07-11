@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 from .apify import ApifyError, ApifyFetcher
 from .brightdata import BrightDataError, BrightDataFetcher
@@ -11,6 +12,10 @@ from .detect import DEFAULT_MAX_RATIO, classify_cross_market
 from .extract import offer_id_from_url, offers_from_html
 from .fx import get_pln_czk
 from .scanner import append_findings, compare_markets, scan_query
+
+
+def _log(msg: str) -> None:
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 
 def _make_fetcher(args: argparse.Namespace):
@@ -31,7 +36,7 @@ def _make_fetcher(args: argparse.Namespace):
 
 def _cmd_scan(args: argparse.Namespace) -> int:
     fx = args.fx or get_pln_czk()
-    print(f"PLN/CZK rate: {fx:.3f}")
+    _log(f"PLN/CZK rate: {fx:.3f}")
     all_anomalies = []
     try:
         with _make_fetcher(args) as fetcher:
@@ -43,6 +48,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
                     pages=args.pages,
                     max_products=args.max_products,
                     max_ratio=args.max_ratio,
+                    log=_log,
                 )
     except (BotBlockedError, ApifyError, BrightDataError) as exc:
         print(f"blocked/failed: {exc}", file=sys.stderr)
@@ -164,7 +170,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 def _cmd_compare(args: argparse.Namespace) -> int:
     fx = args.fx or get_pln_czk()
-    print(f"PLN/CZK rate: {fx:.3f}")
+    _log(f"PLN/CZK rate: {fx:.3f}")
     try:
         with _make_fetcher(args) as fetcher:
             discrepancies, n_cz, n_pl = compare_markets(
@@ -176,6 +182,7 @@ def _cmd_compare(args: argparse.Namespace) -> int:
                 max_offers=args.max_offers,
                 cheap_first=args.cheap_first,
                 price_from=args.price_from,
+                log=_log,
             )
     except (BotBlockedError, ApifyError, BrightDataError) as exc:
         print(f"blocked/failed: {exc}", file=sys.stderr)
