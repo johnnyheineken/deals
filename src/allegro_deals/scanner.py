@@ -160,9 +160,12 @@ def compare_markets(
                         resolved += 1
                         cz = cz_by_id[oid]
                         implied = cz.price / offer.price if offer.price else 0
-                        verdict = (
-                            "!! SUSPICIOUS" if implied < 0.6 * fx_pln_czk else "ok"
-                        )
+                        if implied < 0.6 * fx_pln_czk:
+                            verdict = "!! SUSPICIOUS"
+                        elif implied < 0.8 * fx_pln_czk:
+                            verdict = "~ cheaper than PL"
+                        else:
+                            verdict = "ok"
                         log(
                             f"  pair: {cz.price:>8.0f} CZK vs {offer.price:>8.0f} PLN"
                             f"  rate {implied:5.2f}  {verdict}  {cz.title[:45]}"
