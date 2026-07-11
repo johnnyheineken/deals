@@ -227,6 +227,16 @@ def offers_from_html(html: str) -> list[Offer]:
     return list(seen.values())
 
 
+_GTIN_RE = re.compile(r'"gtin1?3?"\s*:\s*"?(\d{12,14})')
+_TITLE_EAN_RE = re.compile(r"<title>[^<]*\((\d{13})\)")
+
+
+def ean_from_html(html: str) -> str | None:
+    """Product EAN from schema.org data or the page title's '(...)' suffix."""
+    m = _GTIN_RE.search(html) or _TITLE_EAN_RE.search(html)
+    return m.group(1) if m else None
+
+
 def product_links_from_html(html: str, base: str = "https://allegro.cz") -> list[str]:
     """Collect /produkt/... links (product pages aggregate all offers)."""
     links: list[str] = []

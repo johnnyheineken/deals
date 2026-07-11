@@ -67,10 +67,12 @@ def scan_query(
     return anomalies
 
 
-def _search_urls(template: str, query: str, pages: int) -> list[str]:
+def _search_urls(template: str, query: str, pages: int, cheap_first: bool = False) -> list[str]:
     urls = []
     for page_no in range(1, pages + 1):
         url = template.format(query=urllib.parse.quote(query))
+        if cheap_first:
+            url += "&order=p"  # price ascending - mispriced offers surface first
         if page_no > 1:
             url += f"&p={page_no}"
         urls.append(url)
@@ -84,13 +86,17 @@ def compare_markets(
     fx_pln_czk: float = 5.65,
     pages: int = 2,
     max_offers: int = 100,
+    cheap_first: bool = False,
+    deep_limit: int = 50,
     log: Callable[[str], None] = print,
 ) -> tuple[list[CrossDiscrepancy], int, int]:
     """Search both marketplaces and flag cz offers far below their pl price.
 
-    Returns (discrepancies, cz_offer_count, pl_offer_count).
+    ``cheap_first`` sorts the cz side by ascending price (where mispriced
+    offers live); the pl side stays relevance-sorted so reference prices
+    reflect the going rate. Returns (discrepancies, cz count, pl count).
     """
-    cz_urls = _search_urls(SEARCH_URL, query_cz, pages)
+    cz_urls = _search_urls(SEARCH_URL, query_cz, pages, cheap_first=cheap_first)
     pl_urls = _search_urls(PL_SEARCH_URL, query_pl or query_cz, pages)
     log(f"searching cz: {', '.join(cz_urls)}")
     log(f"searching pl: {', '.join(pl_urls)}")
@@ -107,6 +113,29 @@ def compare_markets(
     cz_offers = cz_offers[:max_offers]
     pl_offers = pl_offers[:max_offers]
     log(f"parsed {len(cz_offers)} CZK offers, {len(pl_offers)} PLN offers")
+
+    if cheap_first:
+        # The whole point of cheap-first is catching offers whose cz rank
+        # (cheap) diverges from their pl rank (normal price) - those never
+        # meet in two search top-Ns, so resolve them one by one via their
+        # shared offer id on allegro.pl.
+        pl_ids = {o.offer_id for o in pl_offers if o.offer_id}
+        unmatched = [
+            o for o in cz_offers
+            if o.offer_id and o.offer_id not in pl_ids and o.price >= 40.0
+        ][:deep_limit]
+        if unmatched:
+            log(f"deep-checking {len(unmatched)} cheap cz offers by id on allegro.pl")
+            urls = [f"https://allegro.pl/oferta/{o.offer_id}" for o in unmatched]
+            for url, html in fetch_many(fetcher, urls, log).items():
+                oid = url.rsplit("/", 1)[1]
+                for offer in offers_from_html(html):
+                    if offer.currency == "PLN" and (offer.offer_id or oid) == oid:
+                        pl_offers.append(
+                            Offer(title=offer.title, price=offer.price,
+                                  currency="PLN", offer_id=oid, url=url)
+                        )
+                        break
 
     discrepancies = find_cross_discrepancies(cz_offers, pl_offers, fx_pln_czk)
     for d in discrepancies:

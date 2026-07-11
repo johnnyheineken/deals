@@ -71,31 +71,47 @@ def _offer_from_html(html: str, offer_id: str | None, currency: str):
     return offers[0] if offers else None
 
 
-def _pl_reference_by_model(fetcher, title: str) -> tuple[float, str] | None:
-    """Median PLN price of allegro.pl offers matching the title's model number.
+def _pl_reference_by_model(fetcher, title: str, cz_html: str = "") -> tuple[float, str] | None:
+    """Median PLN price for the same product found via allegro.pl search.
 
     Fallback for offers that exist only on allegro.cz (no shared offer id).
+    Prefers an EAN search (exact product match), then the model number
+    from the title.
     """
     import urllib.parse
     from statistics import median
 
     from .detect import model_tokens
+    from .extract import ean_from_html
     from .scanner import PL_SEARCH_URL
 
+    ean = ean_from_html(cz_html) if cz_html else None
+    if ean:
+        html = fetcher.get_html(PL_SEARCH_URL.format(query=ean))
+        prices = [o.price for o in offers_from_html(html) if o.currency == "PLN"]
+        if prices:
+            return median(prices), (
+                f"median of {len(prices)} allegro.pl offers for EAN {ean}"
+            )
     tokens = model_tokens(title)
     if not tokens:
         return None
     token = sorted(tokens)[0]
     query = f"{title.split()[0]} {token}"
     html = fetcher.get_html(PL_SEARCH_URL.format(query=urllib.parse.quote(query)))
-    prices = [
-        o.price
-        for o in offers_from_html(html)
-        if o.currency == "PLN" and token in model_tokens(o.title)
-    ]
-    if not prices:
-        return None
-    return median(prices), f"median of {len(prices)} allegro.pl offers for '{query}'"
+    pln_offers = [o for o in offers_from_html(html) if o.currency == "PLN"]
+    prices = [o.price for o in pln_offers if token in model_tokens(o.title)]
+    if prices:
+        return median(prices), f"median of {len(prices)} allegro.pl offers for '{query}'"
+    # Polish titles often omit the model number; with such a specific query
+    # a handful of results is still a trustworthy reference.
+    if 0 < len(pln_offers) <= 5:
+        return (
+            median(o.price for o in pln_offers),
+            f"median of {len(pln_offers)} allegro.pl results for '{query}' "
+            "(model number not in titles)",
+        )
+    return None
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
@@ -108,7 +124,8 @@ def _cmd_check(args: argparse.Namespace) -> int:
     pl_url = f"https://allegro.pl/oferta/{offer_id}"
     try:
         with _make_fetcher(args) as fetcher:
-            cz_offer = _offer_from_html(fetcher.get_html(cz_url), offer_id, "CZK")
+            cz_html = fetcher.get_html(cz_url)
+            cz_offer = _offer_from_html(cz_html, offer_id, "CZK")
             if cz_offer is None:
                 print(f"could not read the CZK price from {cz_url}", file=sys.stderr)
                 return 1
@@ -121,7 +138,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
                 pln = pl_offer.price
             else:
                 # offer not mirrored on allegro.pl - compare by model number
-                ref = _pl_reference_by_model(fetcher, cz_offer.title)
+                ref = _pl_reference_by_model(fetcher, cz_offer.title, cz_html)
                 if ref is None:
                     print(
                         f"offer {offer_id} not found on allegro.pl and no "
@@ -157,6 +174,7 @@ def _cmd_compare(args: argparse.Namespace) -> int:
                 fx_pln_czk=fx,
                 pages=args.pages,
                 max_offers=args.max_offers,
+                cheap_first=args.cheap_first,
             )
     except (BotBlockedError, ApifyError, BrightDataError) as exc:
         print(f"blocked/failed: {exc}", file=sys.stderr)
@@ -221,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_cmp.add_argument("--pages", type=int, default=2, help="search pages per marketplace")
     p_cmp.add_argument("--max-offers", type=int, default=100, help="offers to compare per side")
+    p_cmp.add_argument("--cheap-first", action="store_true", help="sort the cz side by price ascending (hunts mispriced offers)")
     p_cmp.set_defaults(func=_cmd_compare)
 
     p_reset = sub.add_parser("reset", help="delete the browser profile after a DataDome block")
