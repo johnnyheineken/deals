@@ -8,9 +8,10 @@ that ratio.
 
 from __future__ import annotations
 
+import re
 from statistics import median
 
-from .models import Anomaly, Offer
+from .models import Anomaly, CrossDiscrepancy, Offer
 
 MIN_PEERS = 2  # need at least this many other offers to trust the median
 FX_TOLERANCE = 0.30  # implied rate within +-30% of the real rate => currency swap
@@ -58,6 +59,78 @@ def find_anomalies(
         )
     anomalies.sort(key=lambda a: (a.kind != "currency_swap", a.ratio))
     return anomalies
+
+
+_MODEL_TOKEN_RE = re.compile(r"\b(\d{4,6})\b")
+
+
+def model_tokens(title: str) -> set[str]:
+    """Model-number-ish tokens from a title (e.g. BRIO '36029'), minus years."""
+    return {
+        t
+        for t in _MODEL_TOKEN_RE.findall(title)
+        if not (len(t) == 4 and t.startswith(("19", "20")))
+    }
+
+
+def find_cross_discrepancies(
+    cz_offers: list[Offer],
+    pl_offers: list[Offer],
+    fx_pln_czk: float,
+    max_ratio: float = 0.55,
+    min_price: float = 40.0,
+) -> list[CrossDiscrepancy]:
+    """Match allegro.cz offers to allegro.pl ones and flag price gaps.
+
+    Matching is by shared offer id first (the same offer exists on both
+    marketplaces), then by model-number token in the title, comparing
+    against the median PLN price of the matching Polish offers.
+    """
+    pl_by_id = {o.offer_id: o for o in pl_offers if o.offer_id}
+    pl_by_token: dict[str, list[float]] = {}
+    for o in pl_offers:
+        for token in model_tokens(o.title):
+            pl_by_token.setdefault(token, []).append(o.price)
+
+    results: list[CrossDiscrepancy] = []
+    for cz in cz_offers:
+        if cz.price < min_price:
+            continue
+        pln_ref: float | None = None
+        matched_by = ""
+        if cz.offer_id and cz.offer_id in pl_by_id:
+            pln_ref = pl_by_id[cz.offer_id].price
+            matched_by = "offer_id"
+        else:
+            tokens = model_tokens(cz.title)
+            # pick the token with the most Polish offers behind it
+            best = max(
+                (t for t in tokens if t in pl_by_token),
+                key=lambda t: len(pl_by_token[t]),
+                default=None,
+            )
+            if best is not None:
+                pln_ref = median(pl_by_token[best])
+                matched_by = f"model:{best}"
+        if pln_ref is None or pln_ref <= 0:
+            continue
+        expected_czk = pln_ref * fx_pln_czk
+        if cz.price / expected_czk > max_ratio:
+            continue
+        implied = cz.price / pln_ref
+        kind = "currency_swap" if abs(implied - 1.0) <= 0.25 else "underpriced"
+        results.append(
+            CrossDiscrepancy(
+                cz_offer=cz,
+                pln_reference=pln_ref,
+                expected_czk=expected_czk,
+                implied_fx=implied,
+                kind=kind,
+                matched_by=matched_by,
+            )
+        )
+    results.sort(key=lambda r: (r.kind != "currency_swap", r.cz_offer.price / r.expected_czk))
+    return results
 
 
 def classify_cross_market(

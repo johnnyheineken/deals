@@ -43,3 +43,28 @@ class Anomaly:
         if self.offer.url:
             base += f"\n  {self.offer.url}"
         return base
+
+
+@dataclass
+class CrossDiscrepancy:
+    """An allegro.cz offer priced far below its allegro.pl counterpart."""
+
+    cz_offer: Offer
+    pln_reference: float
+    expected_czk: float
+    implied_fx: float
+    kind: str  # "currency_swap" | "underpriced"
+    matched_by: str  # "offer_id" | "model:<token>"
+
+    def describe(self) -> str:
+        saved = self.expected_czk - self.cz_offer.price
+        base = (
+            f"{self.cz_offer.title[:70]}\n"
+            f"  {self.cz_offer.price:.0f} CZK on allegro.cz vs. "
+            f"{self.pln_reference:.0f} PLN on allegro.pl "
+            f"(should be ~{self.expected_czk:.0f} CZK, save ~{saved:.0f})\n"
+            f"  CZK/PLN ratio: {self.implied_fx:.2f}, matched by {self.matched_by}"
+        )
+        if self.cz_offer.url:
+            base += f"\n  {self.cz_offer.url}"
+        return base

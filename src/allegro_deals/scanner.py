@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import Callable
 
 from .browser import AllegroBrowser
-from .detect import DEFAULT_MAX_RATIO, find_anomalies
+from .detect import DEFAULT_MAX_RATIO, find_anomalies, find_cross_discrepancies
 from .extract import offers_from_html, product_links_from_html
-from .models import Anomaly
+from .models import Anomaly, CrossDiscrepancy, Offer
 
 SEARCH_URL = "https://allegro.cz/vyhledavani?string={query}"
+PL_SEARCH_URL = "https://allegro.pl/listing?string={query}"
 
 
 def fetch_many(fetcher, urls: list[str], log: Callable[[str], None]) -> dict[str, str]:
@@ -42,12 +43,7 @@ def scan_query(
     product, which gives a trustworthy median to compare against - the same
     comparison a human makes when a 239 CZK offer sits under a 1400 CZK one.
     """
-    search_urls = []
-    for page_no in range(1, pages + 1):
-        url = SEARCH_URL.format(query=urllib.parse.quote(query))
-        if page_no > 1:
-            url += f"&p={page_no}"
-        search_urls.append(url)
+    search_urls = _search_urls(SEARCH_URL, query, pages)
     log(f"searching: {', '.join(search_urls)}")
 
     product_urls: list[str] = []
@@ -69,6 +65,53 @@ def scan_query(
             log("ANOMALY:\n" + anomaly.describe())
         anomalies.extend(found)
     return anomalies
+
+
+def _search_urls(template: str, query: str, pages: int) -> list[str]:
+    urls = []
+    for page_no in range(1, pages + 1):
+        url = template.format(query=urllib.parse.quote(query))
+        if page_no > 1:
+            url += f"&p={page_no}"
+        urls.append(url)
+    return urls
+
+
+def compare_markets(
+    fetcher,
+    query_cz: str,
+    query_pl: str | None = None,
+    fx_pln_czk: float = 5.65,
+    pages: int = 2,
+    max_offers: int = 100,
+    log: Callable[[str], None] = print,
+) -> tuple[list[CrossDiscrepancy], int, int]:
+    """Search both marketplaces and flag cz offers far below their pl price.
+
+    Returns (discrepancies, cz_offer_count, pl_offer_count).
+    """
+    cz_urls = _search_urls(SEARCH_URL, query_cz, pages)
+    pl_urls = _search_urls(PL_SEARCH_URL, query_pl or query_cz, pages)
+    log(f"searching cz: {', '.join(cz_urls)}")
+    log(f"searching pl: {', '.join(pl_urls)}")
+    htmls = fetch_many(fetcher, cz_urls + pl_urls, log)
+
+    cz_offers: list[Offer] = []
+    pl_offers: list[Offer] = []
+    for url, html in htmls.items():
+        offers = offers_from_html(html)
+        if "allegro.cz" in url:
+            cz_offers += [o for o in offers if o.currency == "CZK"]
+        else:
+            pl_offers += [o for o in offers if o.currency == "PLN"]
+    cz_offers = cz_offers[:max_offers]
+    pl_offers = pl_offers[:max_offers]
+    log(f"parsed {len(cz_offers)} CZK offers, {len(pl_offers)} PLN offers")
+
+    discrepancies = find_cross_discrepancies(cz_offers, pl_offers, fx_pln_czk)
+    for d in discrepancies:
+        log(f"DISCREPANCY ({d.kind}):\n" + d.describe())
+    return discrepancies, len(cz_offers), len(pl_offers)
 
 
 def append_findings(anomalies: list[Anomaly], path: str | Path) -> None:

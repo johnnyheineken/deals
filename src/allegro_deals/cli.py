@@ -9,7 +9,7 @@ from .browser import AllegroBrowser, BotBlockedError
 from .detect import DEFAULT_MAX_RATIO, classify_cross_market
 from .extract import offer_id_from_url, offers_from_html
 from .fx import get_pln_czk
-from .scanner import append_findings, scan_query
+from .scanner import append_findings, compare_markets, scan_query
 
 
 def _make_fetcher(args: argparse.Namespace):
@@ -92,6 +92,33 @@ def _cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_compare(args: argparse.Namespace) -> int:
+    fx = args.fx or get_pln_czk()
+    print(f"PLN/CZK rate: {fx:.3f}")
+    try:
+        with _make_fetcher(args) as fetcher:
+            discrepancies, n_cz, n_pl = compare_markets(
+                fetcher,
+                args.query_cz,
+                args.query_pl,
+                fx_pln_czk=fx,
+                pages=args.pages,
+                max_offers=args.max_offers,
+            )
+    except (BotBlockedError, ApifyError) as exc:
+        print(f"blocked/failed: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f"network/browser error: {exc}", file=sys.stderr)
+        return 3
+    swaps = sum(1 for d in discrepancies if d.kind == "currency_swap")
+    print(
+        f"\ncompared {n_cz} CZK offers against {n_pl} PLN offers: "
+        f"{len(discrepancies)} discrepancies ({swaps} likely currency swaps)"
+    )
+    return 0
+
+
 def _cmd_reset(args: argparse.Namespace) -> int:
     browser = AllegroBrowser(profile_dir=args.profile)
     browser.reset_profile()
@@ -128,6 +155,18 @@ def main(argv: list[str] | None = None) -> int:
     p_check = sub.add_parser("check", help="cross-check one offer between allegro.cz and allegro.pl")
     p_check.add_argument("offer", help="offer id or allegro.cz URL")
     p_check.set_defaults(func=_cmd_check)
+
+    p_cmp = sub.add_parser(
+        "compare", help="search both allegro.cz and allegro.pl and flag price gaps"
+    )
+    p_cmp.add_argument("query_cz", help="search phrase for allegro.cz, e.g. 'brio vlak'")
+    p_cmp.add_argument(
+        "query_pl", nargs="?", default=None,
+        help="search phrase for allegro.pl (default: same as query_cz)",
+    )
+    p_cmp.add_argument("--pages", type=int, default=2, help="search pages per marketplace")
+    p_cmp.add_argument("--max-offers", type=int, default=100, help="offers to compare per side")
+    p_cmp.set_defaults(func=_cmd_compare)
 
     p_reset = sub.add_parser("reset", help="delete the browser profile after a DataDome block")
     p_reset.set_defaults(func=_cmd_reset)
