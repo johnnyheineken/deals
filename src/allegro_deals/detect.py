@@ -64,13 +64,21 @@ def find_anomalies(
 _MODEL_TOKEN_RE = re.compile(r"\b(\d{4,6})\b(?!\s*(?:mah|mAh|MAH|GB|gb|TB|W\b|Hz|hz|ml|mm|mAh))")
 
 
+# Numbers that describe a standard, not a product: M.2 form factors and
+# common RAM speed grades.
+_STANDARD_TOKENS = {
+    "2280", "2260", "2242", "2230", "22110",
+    "4800", "5600", "6000", "6400", "3200", "3600",
+}
+
+
 def model_tokens(title: str) -> set[str]:
-    """Model-number-ish tokens from a title (e.g. BRIO '36029'), minus years
-    and numbers that are actually spec values (5000 mAh, 256 GB, ...)."""
+    """Model-number-ish tokens from a title (e.g. BRIO '36029'), minus years,
+    spec values (5000 mAh, 256 GB) and standards (M.2 2280, DDR5 6000)."""
     return {
         t
         for t in _MODEL_TOKEN_RE.findall(title)
-        if not (len(t) == 4 and t.startswith(("19", "20")))
+        if not (len(t) == 4 and t.startswith(("19", "20"))) and t not in _STANDARD_TOKENS
     }
 
 
