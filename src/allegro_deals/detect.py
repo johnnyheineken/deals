@@ -113,6 +113,14 @@ def find_cross_discrepancies(
             lowered = cz.title.lower()
             if any(marker in lowered for marker in partial_markers):
                 continue
+            # Configured systems (PCs, laptops) share component model numbers
+            # without being the same product - only id matches count there.
+            spec_markers = sum(
+                m in lowered
+                for m in (" gb", " tb", "rtx", "gtx", "ryzen", "core i", "ssd", "ram", "wi-fi", "windows")
+            )
+            if spec_markers >= 2:
+                continue
             tokens = model_tokens(cz.title)
             # pick the token with the most Polish offers behind it
             best = max(
