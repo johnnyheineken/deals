@@ -111,12 +111,28 @@ class ApifyFetcher:
 
     # -- public interface ---------------------------------------------------
     def get_many(self, urls: list[str], log=print) -> dict[str, str]:
+        """Fetch URLs, one actor run per marketplace country.
+
+        allegro.pl serves DataDome 403s to Czech residential IPs and vice
+        versa, so each domain gets proxies from its own country.
+        """
+        by_country: dict[str, list[str]] = {}
+        for url in urls:
+            host = url.split("/")[2] if "://" in url else ""
+            country = "PL" if host.endswith(".pl") else self.proxy_country
+            by_country.setdefault(country, []).append(url)
+        out: dict[str, str] = {}
+        for country, batch in by_country.items():
+            out.update(self._run_batch(batch, country, log))
+        return out
+
+    def _run_batch(self, urls: list[str], country: str, log=print) -> dict[str, str]:
         if not urls:
             return {}
-        actor_input = build_actor_input(urls, self.proxy_groups, self.proxy_country)
+        actor_input = build_actor_input(urls, self.proxy_groups, country)
         run = self._request("POST", f"/acts/{self.actor}/runs", actor_input)["data"]
         run_id, dataset_id = run["id"], run["defaultDatasetId"]
-        log(f"apify: run {run_id} fetching {len(urls)} pages...")
+        log(f"apify: run {run_id} fetching {len(urls)} pages via {country} proxies...")
         deadline = time.monotonic() + self.run_timeout
         status = run["status"]
         while status in ("READY", "RUNNING") and time.monotonic() < deadline:

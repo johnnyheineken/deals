@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.parse
 from typing import Any, Iterator
 
 from .models import Offer
@@ -134,11 +135,21 @@ def _find_title(d: dict) -> str | None:
     return None
 
 
+def _clean_url(url: str) -> str:
+    """Unwrap ad-click redirect URLs (/events/clicks?...&redirect=<real>)."""
+    if "/events/clicks" in url:
+        query = urllib.parse.urlparse(url).query
+        redirect = urllib.parse.parse_qs(query).get("redirect")
+        if redirect:
+            return redirect[0].split("?")[0]
+    return url
+
+
 def _find_url(d: dict) -> str | None:
     for key in ("url", "offerUrl", "href", "link"):
         val = d.get(key)
         if isinstance(val, str) and "allegro" in val:
-            return val
+            return _clean_url(val)
     return None
 
 

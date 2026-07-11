@@ -69,7 +69,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         print(f"could not find an offer id in: {args.offer}", file=sys.stderr)
         return 1
     fx = args.fx or get_pln_czk()
-    cz_url = args.offer if args.offer.startswith("http") else f"https://allegro.cz/oferta/{offer_id}"
+    cz_url = args.offer if args.offer.startswith("http") else f"https://allegro.cz/nabidka/{offer_id}"
     pl_url = f"https://allegro.pl/oferta/{offer_id}"
     try:
         with _make_fetcher(args) as fetcher:
