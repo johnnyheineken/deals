@@ -67,12 +67,20 @@ def scan_query(
     return anomalies
 
 
-def _search_urls(template: str, query: str, pages: int, cheap_first: bool = False) -> list[str]:
+def _search_urls(
+    template: str,
+    query: str,
+    pages: int,
+    cheap_first: bool = False,
+    price_from: float | None = None,
+) -> list[str]:
     urls = []
     for page_no in range(1, pages + 1):
         url = template.format(query=urllib.parse.quote(query))
         if cheap_first:
             url += "&order=p"  # price ascending - mispriced offers surface first
+        if price_from:
+            url += f"&price_from={int(price_from)}"
         if page_no > 1:
             url += f"&p={page_no}"
         urls.append(url)
@@ -88,15 +96,20 @@ def compare_markets(
     max_offers: int = 100,
     cheap_first: bool = False,
     deep_limit: int = 50,
+    price_from: float | None = None,
     log: Callable[[str], None] = print,
 ) -> tuple[list[CrossDiscrepancy], int, int]:
     """Search both marketplaces and flag cz offers far below their pl price.
 
     ``cheap_first`` sorts the cz side by ascending price (where mispriced
     offers live); the pl side stays relevance-sorted so reference prices
-    reflect the going rate. Returns (discrepancies, cz count, pl count).
+    reflect the going rate. ``price_from`` filters the cz side to skip the
+    sub-price accessories that dominate cheap-sorted results.
+    Returns (discrepancies, cz count, pl count).
     """
-    cz_urls = _search_urls(SEARCH_URL, query_cz, pages, cheap_first=cheap_first)
+    cz_urls = _search_urls(
+        SEARCH_URL, query_cz, pages, cheap_first=cheap_first, price_from=price_from
+    )
     pl_urls = _search_urls(PL_SEARCH_URL, query_pl or query_cz, pages)
     log(f"searching cz: {', '.join(cz_urls)}")
     log(f"searching pl: {', '.join(pl_urls)}")
@@ -120,10 +133,15 @@ def compare_markets(
         # meet in two search top-Ns, so resolve them one by one via their
         # shared offer id on allegro.pl.
         pl_ids = {o.offer_id for o in pl_offers if o.offer_id}
+        no_id = sum(1 for o in cz_offers if not o.offer_id)
         unmatched = [
             o for o in cz_offers
             if o.offer_id and o.offer_id not in pl_ids and o.price >= 40.0
         ][:deep_limit]
+        log(
+            f"cz offers: {len(cz_offers)} total, {no_id} without id, "
+            f"{len(unmatched)} to deep-check"
+        )
         if unmatched:
             log(f"deep-checking {len(unmatched)} cheap cz offers by id on allegro.pl")
             urls = [f"https://allegro.pl/oferta/{o.offer_id}" for o in unmatched]
