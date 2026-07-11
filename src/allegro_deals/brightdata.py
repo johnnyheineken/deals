@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 API_URL = "https://api.brightdata.com/request"
 MAX_PARALLEL = 5
@@ -95,20 +96,34 @@ class BrightDataFetcher:
     def get_many(self, urls: list[str], log=print) -> dict[str, str]:
         if not urls:
             return {}
-        log(f"brightdata: fetching {len(urls)} pages...")
+        log(f"brightdata: fetching {len(urls)} pages ({MAX_PARALLEL} in parallel)...")
         out: dict[str, str] = {}
         failures: list[str] = []
+        lock = Lock()
+        done = 0
 
         def fetch(url: str) -> None:
+            nonlocal done
+            started = time.monotonic()
             try:
-                out[url] = self.get_html(url)
+                html = self.get_html(url)
             except BrightDataError as exc:
-                failures.append(f"{url}: {exc}")
+                with lock:
+                    done += 1
+                    failures.append(f"{url}: {exc}")
+                    log(f"  [{done}/{len(urls)}] FAILED {url[:80]}")
+                return
+            elapsed = time.monotonic() - started
+            with lock:
+                done += 1
+                out[url] = html
+                log(
+                    f"  [{done}/{len(urls)}] {elapsed:5.1f}s {len(html) // 1024:>5} KB  "
+                    f"{url[:80]}"
+                )
 
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
             list(pool.map(fetch, urls))
         if failures:
             log(f"brightdata: {len(failures)} of {len(urls)} pages failed")
-            for line in failures[:3]:
-                log(f"  {line}")
         return out

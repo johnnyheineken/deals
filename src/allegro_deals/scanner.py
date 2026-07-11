@@ -126,6 +126,8 @@ def compare_markets(
     cz_offers = cz_offers[:max_offers]
     pl_offers = pl_offers[:max_offers]
     log(f"parsed {len(cz_offers)} CZK offers, {len(pl_offers)} PLN offers")
+    for o in sorted(cz_offers, key=lambda o: o.price)[:8]:
+        log(f"  cheapest cz: {o.price:>9.0f} CZK  {o.title[:60]}")
 
     if cheap_first:
         # The whole point of cheap-first is catching offers whose cz rank
@@ -144,7 +146,9 @@ def compare_markets(
         )
         if unmatched:
             log(f"deep-checking {len(unmatched)} cheap cz offers by id on allegro.pl")
+            cz_by_id = {o.offer_id: o for o in unmatched}
             urls = [f"https://allegro.pl/oferta/{o.offer_id}" for o in unmatched]
+            resolved = 0
             for url, html in fetch_many(fetcher, urls, log).items():
                 oid = url.rsplit("/", 1)[1]
                 for offer in offers_from_html(html):
@@ -153,7 +157,20 @@ def compare_markets(
                             Offer(title=offer.title, price=offer.price,
                                   currency="PLN", offer_id=oid, url=url)
                         )
+                        resolved += 1
+                        cz = cz_by_id[oid]
+                        implied = cz.price / offer.price if offer.price else 0
+                        verdict = (
+                            "!! SUSPICIOUS" if implied < 0.6 * fx_pln_czk else "ok"
+                        )
+                        log(
+                            f"  pair: {cz.price:>8.0f} CZK vs {offer.price:>8.0f} PLN"
+                            f"  rate {implied:5.2f}  {verdict}  {cz.title[:45]}"
+                        )
                         break
+                else:
+                    log(f"  no pl twin (cz-only offer): {cz_by_id[oid].title[:55]}")
+            log(f"deep check resolved {resolved}/{len(unmatched)} pl twins")
 
     discrepancies = find_cross_discrepancies(cz_offers, pl_offers, fx_pln_czk)
     for d in discrepancies:
