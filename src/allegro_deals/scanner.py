@@ -178,6 +178,26 @@ def compare_markets(
     discrepancies = find_cross_discrepancies(cz_offers, pl_offers, fx_pln_czk)
     for d in discrepancies:
         log(f"DISCREPANCY ({d.kind}):\n" + d.describe())
+
+    # Ranked digest of every id-matched pair, best discount first - deals
+    # too mild for the formal flag still deserve a look.
+    pl_prices = {o.offer_id: o.price for o in pl_offers if o.offer_id}
+    pairs = [
+        (cz.price / (pl_prices[cz.offer_id] * fx_pln_czk), cz, pl_prices[cz.offer_id])
+        for cz in cz_offers
+        if cz.offer_id in pl_prices and pl_prices[cz.offer_id] > 0
+    ]
+    pairs.sort(key=lambda p: p[0])
+    top = [p for p in pairs if p[0] < 0.95][:10]
+    if top:
+        log("TOP DEALS (cz price as fraction of converted pl price):")
+        for frac, cz, pln in top:
+            log(
+                f"  {frac:5.0%}  {cz.price:>8.0f} CZK (pl: {pln:.0f} PLN ~ "
+                f"{pln * fx_pln_czk:.0f} CZK)  {cz.title[:55]}"
+            )
+            if cz.url:
+                log(f"         {cz.url}")
     return discrepancies, len(cz_offers), len(pl_offers)
 
 
