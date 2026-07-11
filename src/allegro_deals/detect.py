@@ -61,11 +61,12 @@ def find_anomalies(
     return anomalies
 
 
-_MODEL_TOKEN_RE = re.compile(r"\b(\d{4,6})\b")
+_MODEL_TOKEN_RE = re.compile(r"\b(\d{4,6})\b(?!\s*(?:mah|mAh|MAH|GB|gb|TB|W\b|Hz|hz|ml|mm|mAh))")
 
 
 def model_tokens(title: str) -> set[str]:
-    """Model-number-ish tokens from a title (e.g. BRIO '36029'), minus years."""
+    """Model-number-ish tokens from a title (e.g. BRIO '36029'), minus years
+    and numbers that are actually spec values (5000 mAh, 256 GB, ...)."""
     return {
         t
         for t in _MODEL_TOKEN_RE.findall(title)
