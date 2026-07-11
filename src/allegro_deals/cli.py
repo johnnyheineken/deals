@@ -5,6 +5,7 @@ import os
 import sys
 
 from .apify import ApifyError, ApifyFetcher
+from .brightdata import BrightDataError, BrightDataFetcher
 from .browser import AllegroBrowser, BotBlockedError
 from .detect import DEFAULT_MAX_RATIO, classify_cross_market
 from .extract import offer_id_from_url, offers_from_html
@@ -15,7 +16,14 @@ from .scanner import append_findings, compare_markets, scan_query
 def _make_fetcher(args: argparse.Namespace):
     engine = args.engine
     if engine == "auto":
-        engine = "apify" if (args.apify_token or os.environ.get("APIFY_TOKEN")) else "browser"
+        if args.brightdata_token or os.environ.get("BRIGHTDATA_API_TOKEN") or os.environ.get("BRIGHTDATA_TOKEN"):
+            engine = "brightdata"
+        elif args.apify_token or os.environ.get("APIFY_TOKEN"):
+            engine = "apify"
+        else:
+            engine = "browser"
+    if engine == "brightdata":
+        return BrightDataFetcher(token=args.brightdata_token, zone=args.brightdata_zone)
     if engine == "apify":
         return ApifyFetcher(token=args.apify_token)
     return AllegroBrowser(headful=args.headful, profile_dir=args.profile)
@@ -36,7 +44,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
                     max_products=args.max_products,
                     max_ratio=args.max_ratio,
                 )
-    except (BotBlockedError, ApifyError) as exc:
+    except (BotBlockedError, ApifyError, BrightDataError) as exc:
         print(f"blocked/failed: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:  # playwright network errors: keep the message, drop the traceback
@@ -75,7 +83,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         with _make_fetcher(args) as fetcher:
             czk = _price_for_offer(fetcher.get_html(cz_url), offer_id, "CZK")
             pln = _price_for_offer(fetcher.get_html(pl_url), offer_id, "PLN")
-    except (BotBlockedError, ApifyError) as exc:
+    except (BotBlockedError, ApifyError, BrightDataError) as exc:
         print(f"blocked/failed: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
@@ -105,7 +113,7 @@ def _cmd_compare(args: argparse.Namespace) -> int:
                 pages=args.pages,
                 max_offers=args.max_offers,
             )
-    except (BotBlockedError, ApifyError) as exc:
+    except (BotBlockedError, ApifyError, BrightDataError) as exc:
         print(f"blocked/failed: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
@@ -135,11 +143,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fx", type=float, help="override PLN/CZK rate")
     parser.add_argument(
         "--engine",
-        choices=["auto", "apify", "browser"],
+        choices=["auto", "brightdata", "apify", "browser"],
         default="auto",
-        help="fetch via Apify or a local browser (auto: apify when APIFY_TOKEN is set)",
+        help="fetch engine (auto: brightdata > apify > browser, by available tokens)",
     )
     parser.add_argument("--apify-token", help="Apify API token (or set APIFY_TOKEN)")
+    parser.add_argument("--brightdata-token", help="Bright Data API token (or set BRIGHTDATA_API_TOKEN)")
+    parser.add_argument("--brightdata-zone", help="Bright Data Web Unlocker zone (or set BRIGHTDATA_ZONE)")
     parser.add_argument("--headful", action="store_true", help="browser engine: show the window (needed to solve a captcha once)")
     parser.add_argument("--profile", help="browser engine: profile dir (keeps DataDome cookies)")
     sub = parser.add_subparsers(dest="command", required=True)

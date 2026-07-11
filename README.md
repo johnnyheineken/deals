@@ -48,10 +48,26 @@ Or with plain pip: `pip install -e .`
 
 ## Usage
 
-Two fetch engines; `--engine auto` (the default) picks Apify when
-`APIFY_TOKEN` is set, the local browser otherwise.
+Three fetch engines; `--engine auto` (the default) picks the first one
+with credentials available: Bright Data → Apify → local browser.
 
-### Apify engine (recommended)
+### Bright Data engine (most reliable)
+
+[Web Unlocker](https://brightdata.com/products/web-unlocker) returns
+unlocked HTML in one synchronous API call per page — Bright Data handles
+DataDome (proxies, fingerprints, challenges) on their side, and you pay
+per successful request (~$1–1.5 per 1000).
+
+1. Create an account at [brightdata.com](https://brightdata.com) and add a
+   **Web Unlocker** zone (default name `web_unlocker1`).
+2. Copy an API token from *Account settings → API tokens*.
+3. `export BRIGHTDATA_API_TOKEN=...` (and `BRIGHTDATA_ZONE=...` if your
+   zone isn't named `web_unlocker1`).
+
+Pages fetch in parallel (5 at a time), each through an exit IP in its
+marketplace's country.
+
+### Apify engine
 
 Allegro sits behind DataDome bot protection, which makes local scraping a
 cat-and-mouse game. The Apify engine outsources page fetching to the
