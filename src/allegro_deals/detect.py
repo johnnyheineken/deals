@@ -107,6 +107,7 @@ def find_cross_discrepancies(
     partial_markers = (
         "návod", "navod", "instrukcja", "manual", "krabice", "pudełko",
         "samolepk", "naklejk", "nálepk", "minifig", "díl", "części",
+        "figurka", "figurki", "figúrka",
     )
 
     results: list[CrossDiscrepancy] = []
