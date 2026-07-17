@@ -88,6 +88,7 @@ def find_cross_discrepancies(
     fx_pln_czk: float,
     max_ratio: float = 0.55,
     min_price: float = 40.0,
+    min_saving: float = 0.0,
 ) -> list[CrossDiscrepancy]:
     """Match allegro.cz offers to allegro.pl ones and flag price gaps.
 
@@ -143,6 +144,8 @@ def find_cross_discrepancies(
             continue
         expected_czk = pln_ref * fx_pln_czk
         if cz.price / expected_czk > max_ratio:
+            continue
+        if expected_czk - cz.price < min_saving:
             continue
         implied = cz.price / pln_ref
         kind = "currency_swap" if abs(implied - 1.0) <= 0.25 else "underpriced"

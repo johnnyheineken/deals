@@ -183,6 +183,8 @@ def _cmd_compare(args: argparse.Namespace) -> int:
                 cheap_first=args.cheap_first,
                 price_from=args.price_from,
                 deep_limit=args.deep_limit,
+                max_ratio=args.cmp_max_ratio,
+                min_saving=args.min_saving,
                 log=_log,
             )
     except (BotBlockedError, ApifyError, BrightDataError) as exc:
@@ -251,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
     p_cmp.add_argument("--cheap-first", action="store_true", help="sort the cz side by price ascending (hunts mispriced offers)")
     p_cmp.add_argument("--price-from", type=float, help="cz-side minimum price filter, skips cheap accessories")
     p_cmp.add_argument("--deep-limit", type=int, default=50, help="max cheap cz offers to resolve by id on allegro.pl")
+    p_cmp.add_argument("--max-ratio", dest="cmp_max_ratio", type=float, default=0.55, help="flag cz offers below this fraction of the converted pl price")
+    p_cmp.add_argument("--min-saving", type=float, default=0.0, help="flag only discrepancies saving at least this many CZK")
     p_cmp.set_defaults(func=_cmd_compare)
 
     p_reset = sub.add_parser("reset", help="delete the browser profile after a DataDome block")

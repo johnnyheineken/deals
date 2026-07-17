@@ -97,6 +97,8 @@ def compare_markets(
     cheap_first: bool = False,
     deep_limit: int = 50,
     price_from: float | None = None,
+    max_ratio: float = 0.55,
+    min_saving: float = 0.0,
     log: Callable[[str], None] = print,
 ) -> tuple[list[CrossDiscrepancy], int, int]:
     """Search both marketplaces and flag cz offers far below their pl price.
@@ -175,7 +177,9 @@ def compare_markets(
                     log(f"  no pl twin (cz-only offer): {cz_by_id[oid].title[:55]}")
             log(f"deep check resolved {resolved}/{len(unmatched)} pl twins")
 
-    discrepancies = find_cross_discrepancies(cz_offers, pl_offers, fx_pln_czk)
+    discrepancies = find_cross_discrepancies(
+        cz_offers, pl_offers, fx_pln_czk, max_ratio=max_ratio, min_saving=min_saving
+    )
     for d in discrepancies:
         log(f"DISCREPANCY ({d.kind}):\n" + d.describe())
 
