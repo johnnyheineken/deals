@@ -229,6 +229,33 @@ def _cmd_hunt(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_kaufland(args: argparse.Namespace) -> int:
+    from .kaufland import compare_kaufland
+
+    rates = get_rates()
+    _log(f"rates (CZK per unit): {rates}")
+    try:
+        with _make_fetcher(args) as fetcher:
+            gaps = compare_kaufland(
+                fetcher,
+                args.query,
+                rates=rates,
+                countries=args.countries.split(","),
+                limit=args.limit,
+                max_ratio=args.kl_max_ratio,
+                min_saving=args.kl_min_saving,
+                log=_log,
+            )
+    except (BotBlockedError, ApifyError, BrightDataError) as exc:
+        print(f"blocked/failed: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f"network/browser error: {exc}", file=sys.stderr)
+        return 3
+    print(f"\n{len(gaps)} cross-country gaps")
+    return 0
+
+
 def _cmd_reset(args: argparse.Namespace) -> int:
     browser = AllegroBrowser(profile_dir=args.profile)
     browser.reset_profile()
@@ -294,6 +321,16 @@ def main(argv: list[str] | None = None) -> int:
     p_hunt.add_argument("--max-ratio", dest="hunt_max_ratio", type=float, default=0.6, help="flag below this fraction of the reference price")
     p_hunt.add_argument("--min-saving", dest="hunt_min_saving", type=float, default=300.0, help="minimum CZK saving to report")
     p_hunt.set_defaults(func=_cmd_hunt)
+
+    p_kl = sub.add_parser(
+        "kaufland", help="cross-country kaufland compare (cz/sk/de share product ids)"
+    )
+    p_kl.add_argument("query", help="search phrase for kaufland.cz")
+    p_kl.add_argument("--countries", default="cz,de", help="comma list of kaufland countries (cz,sk,de)")
+    p_kl.add_argument("--limit", type=int, default=15, help="products to cross-check")
+    p_kl.add_argument("--max-ratio", dest="kl_max_ratio", type=float, default=0.8, help="flag below this cross-country price ratio")
+    p_kl.add_argument("--min-saving", dest="kl_min_saving", type=float, default=200.0, help="minimum CZK saving to report")
+    p_kl.set_defaults(func=_cmd_kaufland)
 
     p_reset = sub.add_parser("reset", help="delete the browser profile after a DataDome block")
     p_reset.set_defaults(func=_cmd_reset)

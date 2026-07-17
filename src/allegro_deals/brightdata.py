@@ -35,6 +35,8 @@ def country_for_url(url: str) -> str:
         return "pl"
     if host.endswith(".sk"):
         return "sk"
+    if host.endswith(".de"):
+        return "de"
     return "cz"
 
 

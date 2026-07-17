@@ -268,7 +268,7 @@ _KAUFLAND_TITLE_RE = re.compile(
 _KAUFLAND_PRICE_RE = re.compile(
     r"product-price__final-price[^>]*>\s*((?:[0-9]|&nbsp;|[ \xa0.,])+?)\s*(Kč|€|zł)"
 )
-_KAUFLAND_HREF_RE = re.compile(r'href="(/[^"]*?--?p[-/][^"]*|/product/[^"]+)"')
+_KAUFLAND_HREF_RE = re.compile(r'href="(/product/(\d+)/[^"]*)"')
 _KAUFLAND_CURRENCY = {"Kč": "CZK", "€": "EUR", "zł": "PLN"}
 
 
@@ -290,18 +290,65 @@ def kaufland_offers_from_html(html: str) -> list[Offer]:
             price = float(raw)
         except ValueError:
             continue
-        hm = _KAUFLAND_HREF_RE.search(window) or _KAUFLAND_HREF_RE.search(
-            html[max(0, tm.start() - 2000): tm.start()]
-        )
+        # the tile anchor wraps image + title, so the href usually sits
+        # *before* the title span; search backwards first
+        hm = _KAUFLAND_HREF_RE.search(
+            html[max(0, tm.start() - 5000): tm.start()]
+        ) or _KAUFLAND_HREF_RE.search(window)
         offers.append(
             Offer(
                 title=tm.group(1).strip(),
                 price=price,
                 currency=_KAUFLAND_CURRENCY[pm.group(2)],
+                offer_id=hm.group(2) if hm else None,
                 url=("https://www.kaufland.cz" + hm.group(1)) if hm else None,
             )
         )
     return offers
+
+
+_KAUFLAND_PDP_PRICE_RE = re.compile(
+    r'data-test="product-price"[^>]*>\s*((?:[0-9]|&nbsp;|[ \xa0.,])+?)\s*(Kč|€|zł)'
+)
+_TITLE_TAG_RE = re.compile(r"<title>([^<|]{5,160})")
+_KAUFLAND_ID_TOKEN_RE = re.compile(r'[",\[](\d{6,9})[,\]"]')
+
+
+def kaufland_product_from_html(html: str) -> Offer | None:
+    """Title + buy-box price from a kaufland product detail page."""
+    pm = _KAUFLAND_PDP_PRICE_RE.search(html)
+    tm = _TITLE_TAG_RE.search(html)
+    if not pm or not tm:
+        return None
+    raw = re.sub(r"&nbsp;|[ \xa0]", "", pm.group(1))
+    if "," in raw:
+        raw = raw.replace(".", "").replace(",", ".")
+    try:
+        price = float(raw)
+    except ValueError:
+        return None
+    return Offer(
+        title=tm.group(1).strip(),
+        price=price,
+        currency=_KAUFLAND_CURRENCY[pm.group(2)],
+    )
+
+
+def kaufland_candidate_ids(html: str, limit: int = 30) -> list[str]:
+    """Product-id candidates from a kaufland search page.
+
+    Most tiles carry no href (hydrated client-side), but the serialized
+    payload lists result ids as bare 6-9 digit numbers. Junk candidates
+    just 404 on the product page and get skipped.
+    """
+    ids: list[str] = []
+    for m in _KAUFLAND_ID_TOKEN_RE.finditer(html):
+        token = m.group(1)
+        if token not in ids:
+            ids.append(token)
+        if len(ids) >= limit:
+            break
+    return ids
 
 
 _GTIN_RE = re.compile(r'"gtin1?3?"\s*:\s*"?(\d{12,14})')
