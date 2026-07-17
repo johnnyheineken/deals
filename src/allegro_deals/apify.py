@@ -119,7 +119,14 @@ class ApifyFetcher:
         by_country: dict[str, list[str]] = {}
         for url in urls:
             host = url.split("/")[2] if "://" in url else ""
-            country = "PL" if host.endswith(".pl") else self.proxy_country
+            if host.endswith(".pl"):
+                country = "PL"
+            elif host.endswith(".sk"):
+                country = "SK"
+            elif host.endswith(".de"):
+                country = "DE"
+            else:
+                country = self.proxy_country
             by_country.setdefault(country, []).append(url)
         out: dict[str, str] = {}
         for country, batch in by_country.items():

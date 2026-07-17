@@ -311,7 +311,9 @@ _KAUFLAND_PDP_PRICE_RE = re.compile(
     r'data-test="product-price"[^>]*>\s*((?:[0-9]|&nbsp;|[ \xa0.,])+?)\s*(Kč|€|zł)'
 )
 _TITLE_TAG_RE = re.compile(r"<title>([^<|]{5,160})")
-_KAUFLAND_ID_TOKEN_RE = re.compile(r'[",\[](\d{6,9})[,\]"]')
+# Result ids ride in the serialized payload as runs of bare numbers right
+# after 64-char hex hashes: "07d0bf99...",528684597,40233464,...
+_KAUFLAND_ID_TOKEN_RE = re.compile(r'"[0-9a-f]{64}",((?:\d{6,10},)*\d{6,10})')
 
 
 def kaufland_product_from_html(html: str) -> Offer | None:
@@ -343,11 +345,11 @@ def kaufland_candidate_ids(html: str, limit: int = 30) -> list[str]:
     """
     ids: list[str] = []
     for m in _KAUFLAND_ID_TOKEN_RE.finditer(html):
-        token = m.group(1)
-        if token not in ids:
-            ids.append(token)
-        if len(ids) >= limit:
-            break
+        for token in m.group(1).split(","):
+            if token not in ids:
+                ids.append(token)
+            if len(ids) >= limit:
+                return ids
     return ids
 
 
