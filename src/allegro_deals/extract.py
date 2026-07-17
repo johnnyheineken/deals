@@ -266,7 +266,7 @@ _KAUFLAND_TITLE_RE = re.compile(
     r'class="product-title product-title--bold[^"]*"[^>]*title="([^"]{5,160})"'
 )
 _KAUFLAND_PRICE_RE = re.compile(
-    r"product-price__final-price[^>]*>\s*([0-9][0-9 \xa0,.]*?)(?:&nbsp;|\s)*(Kč|€|zł)"
+    r"product-price__final-price[^>]*>\s*((?:[0-9]|&nbsp;|[ \xa0.,])+?)\s*(Kč|€|zł)"
 )
 _KAUFLAND_HREF_RE = re.compile(r'href="(/[^"]*?--?p[-/][^"]*|/product/[^"]+)"')
 _KAUFLAND_CURRENCY = {"Kč": "CZK", "€": "EUR", "zł": "PLN"}
@@ -282,9 +282,10 @@ def kaufland_offers_from_html(html: str) -> list[Offer]:
         pm = _KAUFLAND_PRICE_RE.search(window)
         if not pm:
             continue
-        raw = pm.group(1).replace(" ", "").replace("\xa0", "")
-        # "1.299,00" / "1299,00" / "499" -> float
-        raw = raw.replace(".", "").replace(",", ".")
+        # "1&nbsp;299,00" / "1.299,00" / "499" -> float
+        raw = re.sub(r"&nbsp;|[ \xa0]", "", pm.group(1))
+        if "," in raw:
+            raw = raw.replace(".", "").replace(",", ".")
         try:
             price = float(raw)
         except ValueError:
