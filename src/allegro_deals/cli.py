@@ -256,6 +256,21 @@ def _cmd_kaufland(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_watch(args: argparse.Namespace) -> int:
+    from .watch import run_watch
+
+    rates = get_rates()
+    _log(f"rates (CZK per unit): {rates}")
+    try:
+        with _make_fetcher(args) as fetcher:
+            path = run_watch(fetcher, rates, out_dir=args.out_dir, log=_log)
+    except (BotBlockedError, ApifyError, BrightDataError) as exc:
+        print(f"blocked/failed: {exc}", file=sys.stderr)
+        return 2
+    print(f"\ndigest: {path}")
+    return 0
+
+
 def _cmd_reset(args: argparse.Namespace) -> int:
     browser = AllegroBrowser(profile_dir=args.profile)
     browser.reset_profile()
@@ -331,6 +346,10 @@ def main(argv: list[str] | None = None) -> int:
     p_kl.add_argument("--max-ratio", dest="kl_max_ratio", type=float, default=0.8, help="flag below this cross-country price ratio")
     p_kl.add_argument("--min-saving", dest="kl_min_saving", type=float, default=200.0, help="minimum CZK saving to report")
     p_kl.set_defaults(func=_cmd_kaufland)
+
+    p_watch = sub.add_parser("watch", help="run the full daily watch sweep and write a digest")
+    p_watch.add_argument("--out-dir", default="watch", help="digest/state directory")
+    p_watch.set_defaults(func=_cmd_watch)
 
     p_reset = sub.add_parser("reset", help="delete the browser profile after a DataDome block")
     p_reset.set_defaults(func=_cmd_reset)
