@@ -35,11 +35,14 @@ ALLEGRO_WATCH = [
     ("mikrovlnná trouba", "kuchenka mikrofalowa", 500),
     ("lednice", "lodówka", 2000),
     ("aku vrtačka", "wiertarka akumulatorowa", 800),
+    ("RAM DDR5", None, 300),
+    ("RAM DDR4", None, 200),
+    ("grafická karta", "karta graficzna", 1000),
 ]
 KAUFLAND_WATCH = [
     "lego", "playmobil", "nintendo switch", "playstation 5", "apple watch",
     "dyson", "kávovar", "robotický vysavač", "mikrovlnná trouba", "lednice",
-    "televize", "aku vrtačka",
+    "televize", "aku vrtačka", "RAM DDR5", "grafická karta",
 ]
 HUNT_WATCH = ["lego", "brio", "nintendo switch", "playmobil"]
 
