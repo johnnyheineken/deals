@@ -70,9 +70,16 @@ def compare_kaufland(
     countries = countries or ["cz", "de"]
     search = SEARCH_URL.format(query=urllib.parse.quote(query))
     log(f"kaufland search: {search}")
-    html = fetch_many(fetcher, [search], log).get(search, "")
-    tiles = kaufland_offers_from_html(html)
-    ids = kaufland_candidate_ids(html, limit=limit)
+    tiles: list = []
+    ids: list[str] = []
+    for attempt in range(2):
+        html = fetch_many(fetcher, [search], log).get(search, "")
+        tiles = kaufland_offers_from_html(html)
+        ids = kaufland_candidate_ids(html, limit=limit)
+        if ids:
+            break
+        # the unlocker occasionally returns a pre-hydration shell
+        log("empty search parse, retrying once...")
     log(f"parsed {len(tiles)} tiles, {len(ids)} candidate product ids")
     if not ids:
         return []
