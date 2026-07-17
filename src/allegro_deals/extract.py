@@ -227,6 +227,82 @@ def offers_from_html(html: str) -> list[Offer]:
     return list(seen.values())
 
 
+# --- non-Allegro sources: plain-HTML parsers ------------------------------
+
+# Bazos serves 1998-vintage HTML with unquoted attributes:
+#   <h2 class=nadpis><a href="...inzerat/ID/slug.php">TITLE</a></h2>
+#   ... <div class=inzeratycena><b>1 200 Kč</b>
+_BAZOS_ITEM_RE = re.compile(
+    r'<h2 class="?nadpis"?[^>]*><a href="(https://[a-z]+\.bazos\.cz/inzerat/(\d+)/[^"]+)"[^>]*>'
+    r"([^<]{5,150})</a></h2>"
+    r"(?:(?!<h2).){0,3000}?"
+    r'inzeratycena"?[^>]*><b>(?:<span[^>]*>)?((?:[0-9]|&nbsp;|\s)+)Kč',
+    re.DOTALL,
+)
+
+
+def bazos_offers_from_html(html: str) -> list[Offer]:
+    """Parse bazos.cz search results (used-goods classifieds)."""
+    offers = []
+    seen = set()
+    for m in _BAZOS_ITEM_RE.finditer(html):
+        url, ad_id, title, price_text = m.groups()
+        if ad_id in seen:
+            continue
+        seen.add(ad_id)
+        cleaned = re.sub(r"&nbsp;|\s", "", price_text)
+        try:
+            price = float(cleaned)
+        except ValueError:
+            continue
+        offers.append(
+            Offer(title=title.strip(), price=price, currency="CZK",
+                  offer_id=f"bazos-{ad_id}", url=url)
+        )
+    return offers
+
+
+_KAUFLAND_TITLE_RE = re.compile(
+    r'class="product-title product-title--bold[^"]*"[^>]*title="([^"]{5,160})"'
+)
+_KAUFLAND_PRICE_RE = re.compile(
+    r"product-price__final-price[^>]*>\s*([0-9][0-9 \xa0,.]*?)(?:&nbsp;|\s)*(Kč|€|zł)"
+)
+_KAUFLAND_HREF_RE = re.compile(r'href="(/[^"]*?--?p[-/][^"]*|/product/[^"]+)"')
+_KAUFLAND_CURRENCY = {"Kč": "CZK", "€": "EUR", "zł": "PLN"}
+
+
+def kaufland_offers_from_html(html: str) -> list[Offer]:
+    """Parse Kaufland marketplace search tiles (server-rendered Vue HTML)."""
+    offers = []
+    titles = list(_KAUFLAND_TITLE_RE.finditer(html))
+    for i, tm in enumerate(titles):
+        window_end = titles[i + 1].start() if i + 1 < len(titles) else len(html)
+        window = html[tm.end(): window_end]
+        pm = _KAUFLAND_PRICE_RE.search(window)
+        if not pm:
+            continue
+        raw = pm.group(1).replace(" ", "").replace("\xa0", "")
+        # "1.299,00" / "1299,00" / "499" -> float
+        raw = raw.replace(".", "").replace(",", ".")
+        try:
+            price = float(raw)
+        except ValueError:
+            continue
+        hm = _KAUFLAND_HREF_RE.search(window) or _KAUFLAND_HREF_RE.search(
+            html[max(0, tm.start() - 2000): tm.start()]
+        )
+        offers.append(
+            Offer(
+                title=tm.group(1).strip(),
+                price=price,
+                currency=_KAUFLAND_CURRENCY[pm.group(2)],
+                url=("https://www.kaufland.cz" + hm.group(1)) if hm else None,
+            )
+        )
+    return offers
+
+
 _GTIN_RE = re.compile(r'"gtin1?3?"\s*:\s*"?(\d{12,14})')
 _TITLE_EAN_RE = re.compile(r"<title>[^<]*\((\d{13})\)")
 

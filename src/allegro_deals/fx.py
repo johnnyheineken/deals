@@ -35,21 +35,30 @@ def parse_cnb_rates(text: str) -> dict[str, float]:
     return rates
 
 
-def get_pln_czk(force_refresh: bool = False) -> float:
-    """CZK per 1 PLN, cached for a day, falling back to a constant."""
+DEFAULT_RATES = {"PLN": DEFAULT_PLN_CZK, "EUR": 24.5, "CZK": 1.0}
+
+
+def get_rates(force_refresh: bool = False) -> dict[str, float]:
+    """CZK per unit for the currencies we trade in, cached for a day."""
     cache = _cache_path()
     if not force_refresh and cache.exists():
         try:
             data = json.loads(cache.read_text())
-            if time.time() - data["ts"] < CACHE_TTL:
-                return float(data["pln_czk"])
+            if time.time() - data["ts"] < CACHE_TTL and "rates" in data:
+                return {**DEFAULT_RATES, **data["rates"]}
         except (ValueError, KeyError):
             pass
     try:
         with urllib.request.urlopen(CNB_URL, timeout=15) as resp:
-            rate = parse_cnb_rates(resp.read().decode("utf-8"))["PLN"]
+            all_rates = parse_cnb_rates(resp.read().decode("utf-8"))
+        rates = {"PLN": all_rates["PLN"], "EUR": all_rates["EUR"], "CZK": 1.0}
     except Exception:
-        return DEFAULT_PLN_CZK
+        return dict(DEFAULT_RATES)
     cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps({"ts": time.time(), "pln_czk": rate}))
-    return rate
+    cache.write_text(json.dumps({"ts": time.time(), "rates": rates}))
+    return rates
+
+
+def get_pln_czk(force_refresh: bool = False) -> float:
+    """CZK per 1 PLN, cached for a day, falling back to a constant."""
+    return get_rates(force_refresh)["PLN"]

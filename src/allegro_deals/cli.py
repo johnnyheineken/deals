@@ -10,7 +10,7 @@ from .brightdata import BrightDataError, BrightDataFetcher
 from .browser import AllegroBrowser, BotBlockedError
 from .detect import DEFAULT_MAX_RATIO, classify_cross_market
 from .extract import offer_id_from_url, offers_from_html
-from .fx import get_pln_czk
+from .fx import get_pln_czk, get_rates
 from .scanner import append_findings, compare_markets, scan_query
 
 
@@ -201,6 +201,34 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_hunt(args: argparse.Namespace) -> int:
+    from .hunt import hunt
+
+    rates = get_rates()
+    _log(f"rates (CZK per unit): {rates}")
+    try:
+        with _make_fetcher(args) as fetcher:
+            findings = hunt(
+                fetcher,
+                args.query,
+                query_pl=args.query_pl,
+                rates=rates,
+                pages=args.pages,
+                max_ratio=args.hunt_max_ratio,
+                min_saving=args.hunt_min_saving,
+                log=_log,
+            )
+    except (BotBlockedError, ApifyError, BrightDataError) as exc:
+        print(f"blocked/failed: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f"network/browser error: {exc}", file=sys.stderr)
+        return 3
+    swaps = sum(1 for f in findings if f.kind == "currency_swap")
+    print(f"\n{len(findings)} findings ({swaps} currency swaps) across all sources")
+    return 0
+
+
 def _cmd_reset(args: argparse.Namespace) -> int:
     browser = AllegroBrowser(profile_dir=args.profile)
     browser.reset_profile()
@@ -256,6 +284,16 @@ def main(argv: list[str] | None = None) -> int:
     p_cmp.add_argument("--max-ratio", dest="cmp_max_ratio", type=float, default=0.55, help="flag cz offers below this fraction of the converted pl price")
     p_cmp.add_argument("--min-saving", type=float, default=0.0, help="flag only discrepancies saving at least this many CZK")
     p_cmp.set_defaults(func=_cmd_compare)
+
+    p_hunt = sub.add_parser(
+        "hunt", help="multi-source hunt: allegro cz/pl/sk + kaufland.cz + bazos.cz"
+    )
+    p_hunt.add_argument("query", help="search phrase (Czech), e.g. 'brio vlak'")
+    p_hunt.add_argument("--query-pl", help="Polish phrase for allegro.pl (default: same)")
+    p_hunt.add_argument("--pages", type=int, default=2, help="search pages for allegro cz/pl")
+    p_hunt.add_argument("--max-ratio", dest="hunt_max_ratio", type=float, default=0.6, help="flag below this fraction of the reference price")
+    p_hunt.add_argument("--min-saving", dest="hunt_min_saving", type=float, default=300.0, help="minimum CZK saving to report")
+    p_hunt.set_defaults(func=_cmd_hunt)
 
     p_reset = sub.add_parser("reset", help="delete the browser profile after a DataDome block")
     p_reset.set_defaults(func=_cmd_reset)
