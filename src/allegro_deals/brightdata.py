@@ -29,9 +29,13 @@ class BrightDataError(RuntimeError):
 
 
 def country_for_url(url: str) -> str:
-    """Proxy exit country per marketplace - allegro.pl 403s foreign IPs."""
+    """Proxy exit country per marketplace - Allegro 403s foreign IPs."""
     host = url.split("/")[2] if "://" in url else ""
-    return "pl" if host.endswith(".pl") else "cz"
+    if host.endswith(".pl"):
+        return "pl"
+    if host.endswith(".sk"):
+        return "sk"
+    return "cz"
 
 
 def build_request_payload(url: str, zone: str) -> dict:
