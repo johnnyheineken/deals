@@ -51,3 +51,24 @@ def test_cross_market_classification():
     assert classify_cross_market(239.0, 239.0, FX) == "currency_swap"
     assert classify_cross_market(1350.0, 239.0, FX) == "ok"  # 5.65 implied
     assert classify_cross_market(700.0, 239.0, FX) == "mismatch"
+
+
+def test_model_tokens_excludes_spec_values():
+    from allegro_deals.detect import model_tokens
+    # spec numbers followed by a unit are not model numbers
+    assert model_tokens("Grafická karta 4 GB GDDR5 128-bit PCI Express 1000 MHz") == set()
+    assert model_tokens("Baterie 5000 mAh") == set()
+    assert model_tokens("RAM DDR5 6000 MHz 16 GB") == set()
+    # real model numbers survive
+    assert model_tokens("Grafická karta RTX 4090 24GB") == {"4090"}
+    assert model_tokens("MSI GTX 1660 Super") == {"1660"}
+    assert model_tokens("LEGO Technic 42151") == {"42151"}
+
+
+def test_accessory_markers_skip_cross_match():
+    from allegro_deals.detect import find_cross_discrepancies
+    cz = [Offer(title="5x Vodní filtr náhradní pro Philips 4300 LatteGo", price=608,
+                currency="CZK", offer_id="a1")]
+    pl = [Offer(title="Ekspres Philips 4300 LatteGo", price=2000, currency="PLN", offer_id="b1"),
+          Offer(title="Philips 4300 LatteGo", price=1900, currency="PLN", offer_id="b2")]
+    assert find_cross_discrepancies(cz, pl, FX) == []

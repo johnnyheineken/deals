@@ -61,7 +61,12 @@ def find_anomalies(
     return anomalies
 
 
-_MODEL_TOKEN_RE = re.compile(r"\b(\d{4,6})\b(?!\s*(?:mah|mAh|MAH|GB|gb|TB|W\b|Hz|hz|ml|mm|mAh))")
+# A number is a spec value, not a model number, when a unit follows it
+# (1000 MHz, 5000 mAh, 256 GB, 128 bit, 550 ml, ...).
+_MODEL_TOKEN_RE = re.compile(
+    r"\b(\d{4,6})\b(?!\s*-?\s*(?:mah|gb|tb|w|mhz|ghz|khz|hz|ml|mm|cm|bit|wh|va|rpm|lm|nm)\b)",
+    re.IGNORECASE,
+)
 
 
 # Numbers that describe a standard, not a product: M.2 form factors and
