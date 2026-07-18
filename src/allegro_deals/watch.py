@@ -98,9 +98,10 @@ def run_watch(
             )
             for d in discrepancies:
                 add(
-                    d.kind, d.offer.title, d.offer.price, d.reference_price,
-                    d.offer.url, "allegro.cz",
-                    f"vs allegro.pl, implied FX {d.implied_fx:.2f}, matched by {d.matched_by}",
+                    d.kind, d.cz_offer.title, d.cz_offer.price, d.expected_czk,
+                    d.cz_offer.url, "allegro.cz",
+                    f"vs allegro.pl {d.pln_reference:.0f} PLN, "
+                    f"CZK/PLN ratio {d.implied_fx:.2f}, matched by {d.matched_by}",
                 )
         except Exception:
             log(f"allegro compare '{query}' failed:\n{traceback.format_exc(limit=1)}")
