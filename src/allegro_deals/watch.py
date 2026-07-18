@@ -75,6 +75,17 @@ def run_watch(
 
     rows: list[dict] = []
 
+    def checkpoint() -> None:
+        # Persist after every category so a mid-sweep container restart keeps
+        # the findings gathered so far instead of losing the whole run.
+        _seen_path(out_dir).write_text(json.dumps(seen, indent=0))
+        (out_dir / f"digest-{day}.md").write_text(
+            _render_digest(rows, day, time.monotonic() - started), encoding="utf-8"
+        )
+        (out_dir / f"findings-{day}.json").write_text(
+            json.dumps(rows, ensure_ascii=False, indent=1)
+        )
+
     def add(kind: str, title: str, price: float, reference: float, url: str | None, source: str, detail: str = "") -> None:
         key = f"{url or title}|{price:.0f}"
         rows.append(
@@ -105,6 +116,7 @@ def run_watch(
                 )
         except Exception:
             log(f"allegro compare '{query}' failed:\n{traceback.format_exc(limit=1)}")
+        checkpoint()
 
     for query in KAUFLAND_WATCH:
         log(f"=== kaufland: {query}")
@@ -122,6 +134,7 @@ def run_watch(
                 )
         except Exception:
             log(f"kaufland '{query}' failed:\n{traceback.format_exc(limit=1)}")
+        checkpoint()
 
     for query in HUNT_WATCH:
         log(f"=== hunt: {query}")
@@ -133,14 +146,10 @@ def run_watch(
                 add(f.kind, f.title, f.price_czk, f.reference_czk, f.url, f.source, f.detail)
         except Exception:
             log(f"hunt '{query}' failed:\n{traceback.format_exc(limit=1)}")
+        checkpoint()
 
-    _seen_path(out_dir).write_text(json.dumps(seen, indent=0))
-    digest = _render_digest(rows, day, time.monotonic() - started)
+    checkpoint()
     path = out_dir / f"digest-{day}.md"
-    path.write_text(digest, encoding="utf-8")
-    (out_dir / f"findings-{day}.json").write_text(
-        json.dumps(rows, ensure_ascii=False, indent=1)
-    )
     log(f"digest written to {path} ({len(rows)} findings)")
     return path
 
