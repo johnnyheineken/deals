@@ -110,6 +110,10 @@ def find_cross_discrepancies(
         "návod", "navod", "instrukcja", "manual", "krabice", "pudełko",
         "samolepk", "naklejk", "nálepk", "minifig", "díl", "części",
         "figurka", "figurki", "figúrka",
+        # replacement parts / consumables that carry the host device's model
+        "filtr", "filter", "náhradní", "náhradné", "zamienn", "wkład",
+        "sáčk", "sáček", "worek", "cartridge", "kryt", "pouzdro", "obal",
+        "adaptér", "nabíječk", "kabel", "řemínek", "pasek",
     )
 
     results: list[CrossDiscrepancy] = []
