@@ -265,8 +265,11 @@ def bazos_offers_from_html(html: str) -> list[Offer]:
 _KAUFLAND_TITLE_RE = re.compile(
     r'class="product-title product-title--bold[^"]*"[^>]*title="([^"]{5,160})"'
 )
+# Kaufland now server-renders Vue with SSR comment markers (<!--[-->, <!---->)
+# between the price tag and the number, so skip those before the digits.
 _KAUFLAND_PRICE_RE = re.compile(
-    r"product-price__final-price[^>]*>\s*((?:[0-9]|&nbsp;|[ \xa0.,])+?)\s*(Kč|€|zł)"
+    r"product-price__final-price[^>]*>(?:<!--[^>]*-->|\s)*"
+    r"((?:[0-9]|&nbsp;|[ \xa0.,])+?)\s*(Kč|€|zł)"
 )
 _KAUFLAND_HREF_RE = re.compile(r'href="(/product/(\d+)/[^"]*)"')
 _KAUFLAND_CURRENCY = {"Kč": "CZK", "€": "EUR", "zł": "PLN"}
@@ -308,7 +311,8 @@ def kaufland_offers_from_html(html: str) -> list[Offer]:
 
 
 _KAUFLAND_PDP_PRICE_RE = re.compile(
-    r'data-test="product-price"[^>]*>\s*((?:[0-9]|&nbsp;|[ \xa0.,])+?)\s*(Kč|€|zł)'
+    r'data-test="product-price"[^>]*>(?:<!--[^>]*-->|\s)*'
+    r"((?:[0-9]|&nbsp;|[ \xa0.,])+?)\s*(Kč|€|zł)"
 )
 _TITLE_TAG_RE = re.compile(r"<title>([^<|]{5,160})")
 # Result ids ride in the serialized payload as runs of bare numbers right
@@ -339,16 +343,23 @@ def kaufland_product_from_html(html: str) -> Offer | None:
 def kaufland_candidate_ids(html: str, limit: int = 30) -> list[str]:
     """Product-id candidates from a kaufland search page.
 
-    Most tiles carry no href (hydrated client-side), but the serialized
-    payload lists result ids as bare 6-9 digit numbers. Junk candidates
-    just 404 on the product page and get skipped.
+    Tiles now carry /product/<id>/ hrefs directly; older markup only had
+    ids in the serialized payload after 64-char hashes. Try hrefs first,
+    fall back to the payload. Junk candidates 404 and get skipped.
     """
     ids: list[str] = []
+
+    def _add(token: str) -> bool:
+        if token not in ids:
+            ids.append(token)
+        return len(ids) >= limit
+
+    for m in _KAUFLAND_HREF_RE.finditer(html):
+        if _add(m.group(2)):
+            return ids
     for m in _KAUFLAND_ID_TOKEN_RE.finditer(html):
         for token in m.group(1).split(","):
-            if token not in ids:
-                ids.append(token)
-            if len(ids) >= limit:
+            if _add(token):
                 return ids
     return ids
 
