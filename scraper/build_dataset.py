@@ -17,8 +17,25 @@ COLUMNS = [
     "condition", "seller_type", "seller_name", "origin_cz", "first_owner",
     "service_book", "color", "region", "listed_date", "scraped_at",
     # extras, not in the original spec
-    "vin", "manufactured",
+    "vin", "manufactured", "head_up_display", "blind_spot", "rear_cross_traffic",
 ]
+
+# equipment flags: 1 = listed, 0 = equipment list given but feature absent, blank = no list
+EQUIP = {  # column: (sauto equipment_cb value, carvago const_key, description regex)
+    "head_up_display": (289, "FEATURE_HEAD_UP_DISPLAY", r"head[\s-]?up|\bHUD\b|projekc\w* na čelní"),
+    "blind_spot": (250, "FEATURE_BLIND_SPOT_ASSIST", r"mrtvého\s+úhlu|\bBSM\b|blind\s*spot"),
+    "rear_cross_traffic": (262, "FEATURE_REAR_CROSS_TRAFFIC_ALERT_RCTA", r"\bRCTA\b|příčného\s+provozu|přijíždějící\w*\s+vozid\w*\s+při\s+couvání"),
+}
+
+
+def equip_flags(listed, has_list, text):
+    out = {}
+    for col, (sid, ckey, pat) in EQUIP.items():
+        if (sid in listed or ckey in listed) or re.search(pat, text or "", re.I):
+            out[col] = 1
+        else:
+            out[col] = 0 if has_list else ""
+    return out
 
 # ---------------------------------------------------------------- text parsing
 
@@ -152,6 +169,8 @@ def sauto_rows():
             "scraped_at": SCRAPED_AT,
             "vin": "" if d.get("hide_vin") else (d.get("vin") or ""),
             "manufactured": man[:7],
+            **equip_flags({e["value"] for e in d.get("equipment_cb") or []},
+                          bool(d.get("equipment_cb")), desc),
         })
     return rows, dropped
 
@@ -215,6 +234,7 @@ def carvago_rows():
             "external_url": c.get("external_url") or "",
             "scraped_at": SCRAPED_AT,
             "vin": c.get("vin") or "",
+            **equip_flags(feats, any(k.startswith("FEATURE_") for k in feats), ""),
         })
     return rows, dropped
 
