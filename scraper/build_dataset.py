@@ -23,13 +23,13 @@ COLUMNS = [
 # ---------------------------------------------------------------- text parsing
 
 TRIMS = [  # (label, pattern) - first match wins, most specific first
-    ("GR Sport", r"\bGR[\s-]?Sport\b|\bGRS\b"),
-    ("Executive", r"\bExecutive\b"),
-    ("Style", r"\bStyle\b"),
-    ("Comfort", r"\bComfort\b"),
+    ("GR Sport", r"\bGR[\s,-]*S(port)?\b|\bGR\b(?!\s*Dyn)"),
+    ("Executive", r"\bExec(utive)?(?=\b|Tech|Plus)"),
+    ("Style", r"\bStyle?(?=\b|Tech|Plus)"),
+    ("Comfort", r"\bComf(ort)?(?=\b|Tech|Plus)"),
     ("Active", r"\bActive\b"),
 ]
-OTHER_TRIMS = r"\b(Trek|Selection|Business|Dynamic|Classic|Prestige|Lounge|Team\s?D(eutschland)?|Premiere|Live|Elegant|Luna|Sol|Edition|Club|Trend)\b"
+OTHER_TRIMS = r"\b(Trek|Selection|Business|Dynamic|Classic|Prestige|Lounge|Team\s?D(eutschland)?|Premiere|Live|Elegant|Luna|Sol|Edition|Club|Trend|Teamplayer|Limited)\b"
 
 
 def parse_trim(title, desc):
@@ -55,6 +55,7 @@ FIRST_OWNER = re.compile(r"\b(1\.|první|prvního|jeden|1)\s*(majitel|maj\.)|\bo
 NOT_FIRST_OWNER = re.compile(r"\b(2\.|3\.|druh\w+|třet\w+)\s*majitel", re.I)
 SERVICE_BOOK = re.compile(r"servisní\s+kn[ií]ž|servisk|kompletní\s+servisní\s+histori|pravidelně\s+servis|servis\w*\s+(pouze\s+)?(v|u)\s+(autorizovan|značkov)|servisováno", re.I)
 LPG = re.compile(r"\bLPG\b|\bCNG\b|plyn", re.I)
+OTHER_BODY = re.compile(r"\bHB\b|hatchback|\bsedan\b|\bliftback\b|\b5d\s*HB\b", re.I)
 DAMAGED = re.compile(r"havarovan|poškozen\w*\s+(vůz|auto|vozidlo)|nepojízdn|po\s+havárii|na\s+díly", re.I)
 
 
@@ -93,7 +94,7 @@ def sauto_rows():
 
         if d.get("status") != "active":
             dropped["inactive"] += 1; continue
-        if body != "Kombi" or fuel != "Hybridní":
+        if body != "Kombi" or fuel != "Hybridní" or OTHER_BODY.search(title):
             dropped["not kombi hybrid"] += 1; continue
         if year < 2019:
             dropped["first_reg < 2019 or unknown"] += 1; continue
