@@ -1,6 +1,6 @@
 # On Cloudsurfer deals – EU 44 (US M 10 / UK 9.5), total ≤ 2,500 CZK
 
-**Status: INTERIM — 5 verified deals (target 10+). Search paused mid-run; see "Still to check".**
+**Status: INTERIM — 5 verified men's EU 44 deals (target 10+); 0 verified women's EU 41 deals. 10 extra DE/PL shops checked with no new qualifying offers.**
 
 Exchange rate: ECB reference rate **1 EUR = 24.424 CZK** (published 2026-11-13, latest available on 2026-11-16).
 Limit 2,500 CZK ≈ €102.36 incl. shipping; "under 2,000 CZK" ≈ €81.89.
@@ -34,6 +34,36 @@ Nothing verified under 2,000 Kč (≈ €82) yet. The cheapest new size-44 offer
 - **Endorphin Republic, Footshop, 4camping**: all ≥ 2,900 Kč.
 - **Varuste.net**: Trail 2 outlet €102.71 (no 44 left in outlet).
 - **ekosport**: Trail 2 at €90.68 is size 44.5 only; size 44 €111.68.
+
+## Women's EU 41 (checked 2026-11-16) — no verified deal ≤ 2,500 CZK
+| Shop | Model / colour | 41? | Total | Result |
+|---|---|---|---|---|
+| Sport Conrad (DE) | Cloudsurfer Trail W Eclipse/Black (42203416) | limited stock | €93.45 + €9.95 = €103.40 ≈ **2,525 Kč** | ✗ 25 Kč over |
+| Sport Conrad (DE) | Cloudsurfer 2 W Pearl/Ivory, Heather/Ivory | limited stock | €103.40 ≈ 2,525 Kč | ✗ 25 Kč over |
+| heyrun.it | Cloudsurfer Next W Kiwi/Ivory | in stock | €89 + shipping (checkout only) | ? unverified |
+| bike24 | Cloudsurfer Next W Black/Eclipse | in stock | €99.64 + €5.99 ≈ 2,580 Kč | ✗ |
+| Foot Locker CZ | Cloudsurfer Next W Peony/Heather | in stock | 2,600 Kč | ✗ (2,200 Kč colours sold out in 41) |
+| on.com CZ | Next / Cloudsurfer 2 W (last season) | — | €110–115 | ✗ |
+| Sportofino.cz | Cloudsurfer Trail W Flame/Dustrose 1,800 Kč | sold out in 41 | — | ✗ |
+| i-Run.it | Next W (8 colours, €83–85) / Cloudsurfer 2 W | Next: no 41; CS2 41 €120 | — | ✗ |
+| Sportano.pl | Cloudsurfer W auburn/frost 349.99 zł; Trail W frost/lima 431.99 zł | sold out in 41 | — | ✗ |
+| JD Sports PL | Next W Black 339.99 zł | 41 unavailable | — | ✗ |
+| Sklep Biegacza (PL) | Cloudsurfer 2 W Pearl/Ivory 3WF10102143, 323.99 zł | only 38 left | — | ✗ |
+| Keller Sports (DE) | Trail 2 W Glacier/Dust €97 | "nicht lieferbar" | — | ✗ |
+
+## German & Polish shops — men's 44 / women's 41 (checked 2026-11-16)
+- **Sport Conrad** (ships to CZ for €9.95 under €100): M Cloudsurfer 2 White/Mineral €93.45 is sold out in 44; Next €87.95 (Ivory/Silver) is sold out in 44; women's 41 near misses listed above.
+- **Keller Sports**: M Next €109, W Trail 2 €97 is unavailable; other Cloudsurfer pages have no price, so they look sold out.
+- **Bergfreunde**: Next Ivory/Silver €87.97 is sold out in 41 and 44; everything else costs €124 or more.
+- **SportScheck**: M Next Black/Eclipse €104.99 (over before shipping); W Trail 2 €82.99 is out of stock.
+- **meinsportline**: Cloudsurfer Trail/Next €99.99–135 before shipping; nothing qualifies.
+- **Sportano.pl**: M Next Black/Eclipse 44 is in stock at 484.49 zł ≈ 2,682 Kč (over); the cheaper women's pairs are sold out in 41.
+- **Stylsport.pl**: search and product redirect URLs return "page not found". It shares Sportano's catalogue.
+- **Sklep Biegacza**: Cloudsurfer 2 M in 44 costs 499.99–557.99 zł (≈ 2,770–3,090 Kč); the 323.99 and 409.99 zł colours have only sizes 38 and 42.5 left.
+- **JD Sports PL**: M Next 599.99–749.99 zł; W Next Black 339.99 zł is unavailable in 41.
+- **Sportega.pl**: Next / Cloudsurfer 2 / Trail 2 cost 568.99–697.45 zł (over).
+
+PLN converted at ECB 2026-11-13: 1 EUR = 4.4113 PLN → 1 PLN ≈ 5.537 CZK.
 
 ## Couldn't scrape / blocked
 - Bright Data SERP API: no SERP zone on the account. Google search went through Apify instead.
